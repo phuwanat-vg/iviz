@@ -1,0 +1,34 @@
+{
+  "name": "iviz",
+  "private": true,
+  "version": "0.1.0",
+  "description": "iViz - lightweight ROS2 visualization for Windows over Foxglove WebSocket bridge",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "mock": "tsx tools/mock-server.ts",
+    "tauri": "tauri",
+    "version:set": "node tools/set-version.mjs"
+  },
+  "dependencies": {
+    "@foxglove/ros2idl-parser": "^0.3.6",
+    "@foxglove/rosmsg": "^5.0.5",
+    "@foxglove/rosmsg2-serialization": "^3.1.2",
+    "@foxglove/ws-protocol": "^0.8.0",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.11.0",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/three": "^0.185.4",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "ws": "^8.21.3"
+  }
+}

@@ -1,0 +1,1088 @@
+:root {
+  --bg: #15181d;
+  --panel: #1d2128;
+  --panel-2: #242933;
+  --border: #303744;
+  --text: #dfe4ec;
+  --muted: #8b95a5;
+  --accent: #3da5ff;
+  --accent-2: #2b7bd1;
+  --ok: #3ccf7a;
+  --warn: #f2b134;
+  --err: #ff5a6a;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, "Cascadia Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 var(--font);
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  grid-template-columns: 320px 1fr;
+  grid-template-areas:
+    "top top"
+    "side view";
+}
+
+/* ---------- top bar ---------- */
+.topbar {
+  grid-area: top;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-height: 44px;
+  padding: 5px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  color: var(--accent);
+  margin-right: 6px;
+}
+.brand span {
+  color: var(--text);
+}
+.url-input {
+  width: 260px;
+  font-family: var(--mono);
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  min-width: 140px;
+}
+.status .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.status.connected .dot {
+  background: var(--ok);
+}
+.status.connecting .dot {
+  background: var(--warn);
+}
+.spacer {
+  flex: 1;
+}
+.stats {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg button {
+  border: 0;
+  border-radius: 0;
+  background: var(--panel-2);
+}
+.seg button.active {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+/* ---------- controls ---------- */
+button,
+input,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+}
+input:focus,
+select:focus {
+  border-color: var(--accent);
+}
+button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+button svg.icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+button.icon-only {
+  gap: 0;
+  padding: 3px 5px;
+}
+.section-title svg.icon {
+  width: 13px;
+  height: 13px;
+  opacity: 0.8;
+}
+.stats svg.icon {
+  width: 12px;
+  height: 12px;
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+button:hover:not(:disabled) {
+  background: #2c333f;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+button.primary {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #fff;
+}
+button.primary:hover {
+  background: var(--accent);
+}
+button.danger {
+  color: var(--err);
+}
+button.active-tool {
+  background: #6b4b00;
+  border-color: var(--warn);
+  color: #ffe2a0;
+}
+button.icon {
+  padding: 2px 6px;
+  line-height: 1;
+}
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+input[type="color"] {
+  padding: 0;
+  width: 36px;
+  height: 22px;
+}
+input[type="number"] {
+  width: 90px;
+  font-family: var(--mono);
+}
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  grid-area: side;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.section {
+  border-bottom: 1px solid var(--border);
+}
+.section > .section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+.section > .section-title:hover {
+  color: var(--text);
+}
+.section > .section-title .caret {
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.section.collapsed > .section-title .caret {
+  transform: rotate(-90deg);
+}
+.section.collapsed > .section-body {
+  display: none;
+}
+.section-body {
+  padding: 0 10px 10px;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+.row label {
+  flex: 1;
+  color: var(--muted);
+}
+.row .value {
+  min-width: 0;
+}
+
+/* topic list */
+.topic {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px;
+  border-radius: 5px;
+}
+.topic:hover {
+  background: var(--panel-2);
+}
+.topic.unsupported {
+  opacity: 0.45;
+}
+/* services have no enable checkbox and no rate readout */
+.topic.service {
+  grid-template-columns: 1fr;
+}
+.topic .name {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topic .type {
+  font-size: 10px;
+  color: var(--muted);
+}
+.topic .hz {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-align: right;
+  min-width: 52px;
+}
+.empty {
+  color: var(--muted);
+  font-style: italic;
+  padding: 6px 4px;
+}
+
+/* layer cards */
+.layer {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 6px 0;
+  background: var(--panel-2);
+}
+.layer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  cursor: pointer;
+}
+.layer-head .name {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layer-head .status {
+  min-width: 0;
+  font-size: 11px;
+  color: var(--warn);
+}
+.layer-body {
+  padding: 4px 8px 8px;
+  border-top: 1px solid var(--border);
+}
+.layer.collapsed .layer-body {
+  display: none;
+}
+.layer.hidden .name {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+/* ---------- viewer ---------- */
+.view {
+  grid-area: view;
+  position: relative;
+  overflow: hidden;
+}
+.view canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(20, 24, 30, 0.75);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: pre;
+}
+.hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: rgba(107, 75, 0, 0.9);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  color: #ffe2a0;
+  pointer-events: none;
+}
+.toasts {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 60%;
+}
+.toast {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(60, 20, 26, 0.92);
+  border: 1px solid var(--err);
+  color: #ffd0d6;
+  font-size: 12px;
+}
+.toast.info {
+  background: rgba(20, 40, 60, 0.92);
+  border-color: var(--accent);
+  color: #cfe8ff;
+}
+.toast.update {
+  pointer-events: auto;
+  min-width: 320px;
+}
+.toast.update .row {
+  padding-top: 6px;
+  gap: 8px;
+}
+
+/* ---------- route mode ---------------------------------------------------- */
+/* Route mode is an editing surface, not a data readout: bigger type, bigger
+   hit targets and more air than iViz's ordinary viewer sidebar, which these
+   rules never touch (everything below is scoped to .route-panel or the route
+   tool bar). */
+.route-panel {
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.route-panel button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 7px;
+}
+.route-panel button.icon-only {
+  min-width: 28px;
+  padding: 5px 6px;
+  justify-content: center;
+}
+.route-panel button.big {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-weight: 600;
+}
+.route-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.route-panel input,
+.route-panel select {
+  min-height: 28px;
+  padding: 4px 8px;
+}
+.route-panel .row {
+  gap: 10px;
+  padding: 5px 0;
+}
+.route-panel .row.wrap {
+  flex-wrap: wrap;
+}
+.route-panel .row label {
+  font-size: 12px;
+}
+.route-panel .section > .section-title {
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.route-panel .section-body {
+  padding: 0 12px 12px;
+}
+.route-panel .empty,
+.route-panel .prose {
+  margin: 0;
+  padding: 4px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  font-style: normal;
+}
+.route-panel .prose.unsaved {
+  color: #ffe2a0;
+}
+.route-panel .prose.muted {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.route-panel .note {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 4px 0 2px;
+  line-height: 1.5;
+}
+.route-panel .sub-title {
+  margin-top: 12px;
+  padding: 8px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.route-panel .row.buttons {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.route-panel .row.buttons button {
+  flex: none;
+}
+.route-panel .row.buttons select {
+  flex: 1;
+  min-width: 0;
+}
+.route-panel kbd {
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+
+/* header: the mission, what the robot is doing, the run controls */
+.route-header {
+  padding: 12px 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.route-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.route-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.route-panel button.small {
+  min-height: 26px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.route-header .status-line {
+  margin: 8px 0 12px;
+}
+.route-header .run-row {
+  gap: 8px;
+}
+.route-header .run-row button.primary {
+  padding-inline: 18px;
+}
+.route-panel .save-row button.icon-only {
+  min-height: 34px;
+  min-width: 34px;
+}
+.status-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.status-line .dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  align-self: center;
+}
+.status-line.running {
+  color: #cfe8ff;
+}
+.status-line.running .dot {
+  background: var(--accent);
+}
+.status-line.paused {
+  color: #ffe2a0;
+}
+.status-line.paused .dot {
+  background: var(--warn);
+}
+.status-line.idle .dot {
+  background: var(--ok);
+}
+.prompt-banner {
+  margin: 10px 0 0;
+  padding: 10px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  background: rgba(107, 75, 0, 0.35);
+  color: #ffe2a0;
+}
+.prompt-banner .prompt-text {
+  padding-bottom: 6px;
+  line-height: 1.45;
+}
+.menu-card {
+  margin-top: 10px;
+  padding: 4px 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+/* guided cards: what to do when a section would otherwise be empty */
+.panel-card {
+  position: relative;
+  margin: 12px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.panel-card .card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  padding-bottom: 2px;
+}
+.panel-card .row {
+  padding-top: 8px;
+}
+.guide-step {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.guide-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.guide-no {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--accent-2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.guide-title {
+  flex: 1;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.guide-step .prose {
+  padding: 6px 0 8px 30px;
+}
+.route-panel button.step-btn {
+  margin-left: 30px;
+}
+.notice-card.error {
+  border-color: var(--err);
+  background: rgba(60, 20, 26, 0.5);
+}
+.notice-card .card-title svg.icon {
+  color: var(--err);
+}
+.notice-card > button.icon-only {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.detail {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.detail summary {
+  cursor: pointer;
+  padding: 3px 0;
+}
+.detail pre {
+  margin: 4px 0 0;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* stops */
+.stops {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stop {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.stop.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.stop.active {
+  border-color: var(--warn);
+}
+.stop.done .stop-head .no {
+  background: var(--ok);
+  color: #08130c;
+}
+.stop.failed {
+  border-color: var(--err);
+}
+.stop.failed .stop-head .no {
+  background: var(--err);
+  color: #2a0409;
+}
+.stop.dragging {
+  opacity: 0.5;
+}
+.stop.drop-target,
+.action.drop-target {
+  outline: 1px dashed var(--accent);
+}
+.stop-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.stop-head:hover {
+  background: #2a3140;
+}
+.stop-head .no {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--accent-2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.stop-text {
+  flex: 1;
+  min-width: 0;
+}
+.stop-text .name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stop-text .where {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.grip {
+  color: var(--muted);
+  cursor: grab;
+  display: inline-flex;
+}
+.warn-line {
+  padding: 4px 10px 6px 38px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--warn);
+}
+.note-line {
+  padding: 2px 10px 6px 38px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* actions */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.action {
+  border-top: 1px solid var(--border);
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 5px 8px 5px 38px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.action:hover {
+  background: #2a3140;
+}
+.action.open {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  padding: 6px 8px 8px;
+  cursor: default;
+}
+.action.open:hover {
+  background: var(--panel-2);
+}
+/* The open card shows every value in the form below, so the one-line summary
+   would only be a squeezed duplicate of it. */
+.action.open > .action-head .sum {
+  display: none;
+}
+.action.open > .action-head .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.action.muted {
+  opacity: 0.75;
+  cursor: default;
+  padding-left: 8px;
+}
+.action-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  width: 100%;
+}
+.action-head .name {
+  white-space: nowrap;
+  font-weight: 500;
+}
+.action-head .sum {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  /* Two lines, broken at a word: an action summary is meant to be read. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+.action-form {
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+}
+.action-form input[type="text"],
+.action-form input[type="number"],
+.action-form select,
+.action-form textarea {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.action-form textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  resize: vertical;
+}
+.action-form textarea.mono {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.action-form textarea.bad {
+  border-color: var(--err);
+}
+.sub-form {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: 6px 0;
+}
+.sub-form .sub-title {
+  border-top: 0;
+  margin-top: 0;
+}
+button.link-btn {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  padding: 4px 0;
+}
+button.link-btn:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+/* lanes */
+.lane {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin: 8px 0;
+  background: var(--panel-2);
+}
+.lane.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.lane-title {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 0 4px;
+  cursor: pointer;
+}
+.lane-controls {
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lane-controls label {
+  flex: none;
+  font-size: 11px;
+}
+.lane-controls input[type="number"] {
+  width: 72px;
+}
+
+/* action picker */
+.picker {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px 10px;
+  margin-top: 8px;
+  background: var(--panel-2);
+}
+.picker-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 0 5px;
+}
+.picker-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+button.picker-item {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+/* validation */
+.finding {
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 6px 8px;
+  border-radius: 5px;
+  margin: 6px 0;
+  background: var(--panel-2);
+  overflow-wrap: anywhere;
+}
+.finding .where {
+  font-size: 11px;
+  color: var(--muted);
+  padding-top: 2px;
+}
+.finding.error {
+  color: #ffd0d6;
+  border-left: 3px solid var(--err);
+}
+.finding.warning {
+  color: #ffe2a0;
+  border-left: 3px solid var(--warn);
+}
+
+/* the tool bar over the map */
+.route-toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  max-width: min(680px, calc(100% - 32px));
+  padding: 7px 8px;
+  background: rgba(20, 24, 30, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.route-toolbar .tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.route-toolbar .sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 4px;
+  background: var(--border);
+}
+.route-toolbar button.tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.route-toolbar button.tool:hover {
+  background: #2c333f;
+}
+.route-toolbar button.tool.active {
+  background: var(--accent-2);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.route-toolbar button.tool.active kbd {
+  color: #dfeaff;
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.route-toolbar kbd {
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 5px;
+}
+.route-toolbar .tool-hint {
+  padding: 7px 6px 1px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: center;
+}
+.route-toolbar .tool-hint[hidden] {
+  display: none;
+}
+
+/* inline naming on the map */
+.inline-name {
+  position: absolute;
+  z-index: 5;
+  width: 140px;
+  transform: translate(14px, -50%);
+  font-size: 13px;
+  padding: 5px 8px;
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* `hidden` must win over the display rules above (sidebar swap, tool strip) */
+.sidebar[hidden],
+.route-toolbar[hidden] {
+  display: none;
+}
+
+label.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.topbar button.unavailable {
+  opacity: 0.55;
+}
+.topbar button.active {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #fff;
+}

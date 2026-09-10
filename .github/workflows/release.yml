@@ -1,0 +1,53 @@
+# Builds the Windows installer, signs the updater artifact, and publishes a
+# GitHub Release with `latest.json` so installed copies of iViz update themselves.
+#
+# Trigger: push a tag like v0.2.0 (see `npm run version:set` in README).
+#
+# Required repository secrets:
+#   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.tauri/iviz.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  the key password (empty string if none)
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "iViz ${{ github.ref_name }}"
+          releaseBody: "See CHANGELOG.md for details."
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target x86_64-pc-windows-msvc

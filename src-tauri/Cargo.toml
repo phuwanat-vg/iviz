@@ -1,0 +1,26 @@
+[package]
+name = "iviz"
+version = "0.1.0"
+description = "iViz - lightweight ROS 2 visualization over Foxglove WebSocket bridge"
+authors = ["WaspIndustry"]
+edition = "2021"
+
+[lib]
+name = "iviz_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
