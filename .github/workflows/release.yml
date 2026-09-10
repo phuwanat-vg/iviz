@@ -37,6 +37,18 @@ jobs:
 
       - run: npm ci
 
+      - name: Check the signing key arrived intact
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          PW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          echo "key bytes: ${#KEY}"
+          echo "key sha256: $(printf '%s' "$KEY" | sha256sum | cut -c1-16)"
+          echo "key ends with newline: $(printf '%s' "$KEY" | tail -c1 | xxd -p)"
+          echo "password bytes: ${#PW}"
+          echo "password is set: ${PW+yes}"
+
       - name: Build and publish release
         uses: tauri-apps/tauri-action@v0
         env:
