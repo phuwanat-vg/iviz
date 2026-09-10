@@ -7,6 +7,12 @@ to be installed on the Windows side and no remote desktop is needed.
 
 Built with Tauri 2 (WebView2) + TypeScript + three.js.
 
+## Download
+
+Grab the latest `iViz_*_x64-setup.exe` from
+[Releases](https://github.com/phuwanat-vg/iviz/releases). Installed copies check
+for new versions themselves, so this is a one-time download.
+
 ## Features
 
 - 3D and 2D (top-down) views, ROS coordinate convention (x forward, y left, z up)
@@ -204,11 +210,10 @@ user gets an "Install & restart" prompt; the installer is downloaded, its
 minisign signature is verified against the public key embedded in the app, and
 iViz restarts on the new version.
 
-One-time setup:
+One-time setup (done for `phuwanat-vg/iviz`, repeat it for a fork):
 
-1. Push this repository to GitHub and replace `OWNER` in
-   `src-tauri/tauri.conf.json` → `plugins.updater.endpoints` with your
-   GitHub user or organization.
+1. Push the repository to GitHub and point
+   `src-tauri/tauri.conf.json` → `plugins.updater.endpoints` at it.
 2. The signing keypair was generated at `%USERPROFILE%\.tauri\iviz.key` (private)
    and `iviz.key.pub` (public, already in `tauri.conf.json`). Back the private key
    up somewhere safe. If it is lost, existing installs can never update again.
@@ -250,11 +255,18 @@ format is:
 }
 ```
 
-Local signed build (same thing CI does), in PowerShell:
+Local signed build (same thing CI does). Use **bash**, not PowerShell:
 
-```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\iviz.key" -Raw; $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""; npm run tauri build
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="$(cat "$USERPROFILE/.tauri/iviz.key")"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
+npm run tauri build
 ```
+
+PowerShell deletes an environment variable when you assign it an empty string,
+so the password never reaches the CLI and the build stops forever on
+`Decrypting updater signing key, expect a prompt for password`. A successful
+build ends with `Finished 2 updater signatures at:`.
 
 This produces `iViz_<version>_x64-setup.exe` plus a `.sig` file next to it; the
 `.sig` contents go into the `signature` field of `latest.json`.
