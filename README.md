@@ -252,9 +252,11 @@ ros2 launch nav2_map_server map_saver_server.launch.py
 ```
 
 A relative map name is written wherever map_saver runs, so an absolute path
-such as `/home/pi/maps/office` is safer. Action names, the controller and the
-goal checker ids are in **Navigation → Setup**; the defaults match nav2_bringup
-on Jazzy.
+such as `/home/pi/maps/office` is safer. Action names and the FollowPath
+controller, goal checker and progress checker names are in **Navigation →
+Setup**. The action names match nav2_bringup on Jazzy. The plugin names are
+empty by default, which makes controller_server use the one it loaded; fill
+them in only when it loads several (its error message lists the names).
 
 ## Typical setups
 

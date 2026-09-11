@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 — 2026-09-12
+
+- Fix: Follow path failed with "FollowPath called with goal_checker name
+  general_goal_checker ... which does not exist" on robots whose plugins are
+  named differently. The controller, goal checker and progress checker names
+  are now empty by default, so controller_server uses the one it loaded.
+  Names saved by 0.2.0 and 0.2.1 are cleared once; set them in
+  Navigation → Setup when controller_server loads several
+
 ## 0.2.1 — 2026-09-12
 
 - Fix: waypoints, paths and nav goals reached Nav2 empty ("Path is empty",

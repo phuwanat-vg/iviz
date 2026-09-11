@@ -25,7 +25,10 @@ import type { IconName } from "./icons";
 export const TOOL_WAYPOINT = "nav.waypoint";
 export const TOOL_PATH = "nav.path";
 
-const BRIDGE_CMD = "ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 include_hidden:=true";
+/** Placeholder for plugin names left empty. */
+const ONLY_PLUGIN = "(the only one loaded)";
+
+const BRIDGE_CMD ="ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 include_hidden:=true";
 const MAP_SAVER_CMD = "ros2 launch nav2_map_server map_saver_server.launch.py";
 
 const PHASE_LABEL: Record<NavPhase, string> = {
@@ -279,9 +282,13 @@ export class NavPanel {
         text(nav.navigateThroughPoses, DEFAULT_NAV_SETTINGS.navigateThroughPoses, (v) => (nav.navigateThroughPoses = v || DEFAULT_NAV_SETTINGS.navigateThroughPoses), refreshActions),
       ),
       row("FollowPath", text(nav.followPath, DEFAULT_NAV_SETTINGS.followPath, (v) => (nav.followPath = v || DEFAULT_NAV_SETTINGS.followPath), refreshActions)),
-      row("Controller", text(nav.controllerId, DEFAULT_NAV_SETTINGS.controllerId, (v) => (nav.controllerId = v))),
-      row("Goal checker", text(nav.goalCheckerId, DEFAULT_NAV_SETTINGS.goalCheckerId, (v) => (nav.goalCheckerId = v))),
-      row("Progress checker", text(nav.progressCheckerId, DEFAULT_NAV_SETTINGS.progressCheckerId, (v) => (nav.progressCheckerId = v))),
+      row("Controller", text(nav.controllerId, ONLY_PLUGIN, (v) => (nav.controllerId = v))),
+      row("Goal checker", text(nav.goalCheckerId, ONLY_PLUGIN, (v) => (nav.goalCheckerId = v))),
+      row("Progress checker", text(nav.progressCheckerId, ONLY_PLUGIN, (v) => (nav.progressCheckerId = v))),
+      h("div", {
+        class: "nav-note",
+        text: "Leave the FollowPath names empty when controller_server loads one of each. Fill them in when it loads several; Nav2's error lists the names it has.",
+      }),
       this.#diag,
     );
 

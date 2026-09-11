@@ -37,9 +37,12 @@ export interface NavSettings {
   followPath: string;
   /** Robot base frame, used to resume a path from where the robot stands. */
   robotFrame: string;
+  /** Plugin names for FollowPath; empty lets controller_server use its only one. */
   controllerId: string;
   goalCheckerId: string;
   progressCheckerId: string;
+  /** Bumped when saved defaults need migrating. */
+  idsRevision: number;
   waypointMode: "waypoints" | "through";
   loop: boolean;
   /** Frame the drafted waypoints and path were placed in. */
@@ -55,9 +58,11 @@ export const DEFAULT_NAV_SETTINGS: NavSettings = {
   navigateThroughPoses: "/navigate_through_poses",
   followPath: "/follow_path",
   robotFrame: "base_link",
-  controllerId: "FollowPath",
-  goalCheckerId: "general_goal_checker",
-  progressCheckerId: "progress_checker",
+  // Empty: controller_server uses the only plugin it loaded, whatever its name.
+  controllerId: "",
+  goalCheckerId: "",
+  progressCheckerId: "",
+  idsRevision: 2,
   waypointMode: "waypoints",
   loop: false,
   draftFrame: "",
@@ -93,6 +98,15 @@ export function loadSettings(): AppSettings {
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     const nav = { ...DEFAULT_NAV_SETTINGS, ...(parsed.nav ?? {}) };
+    // 0.2.0 and 0.2.1 saved nav2_bringup's example plugin names as defaults,
+    // which fail on robots that name them differently. Blank them once, so
+    // controller_server picks the plugin it has.
+    if ((parsed.nav?.idsRevision ?? 1) < 2) {
+      if (nav.controllerId === "FollowPath") nav.controllerId = "";
+      if (nav.goalCheckerId === "general_goal_checker") nav.goalCheckerId = "";
+      if (nav.progressCheckerId === "progress_checker") nav.progressCheckerId = "";
+    }
+    nav.idsRevision = 2;
     if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
     if (!Array.isArray(nav.path)) nav.path = [];
     return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], nav };

@@ -1,6 +1,6 @@
 [package]
 name = "iviz"
-version = "0.2.1"
+version = "0.2.2"
 description = "iViz - lightweight ROS 2 visualization over Foxglove WebSocket bridge"
 authors = ["WaspIndustry"]
 edition = "2021"
