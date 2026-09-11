@@ -18,6 +18,7 @@ import { MissionApi } from "../mission/MissionApi";
 import { RouteStore } from "../mission/RouteStore";
 import { RouteLayer } from "../viz/layers/RouteLayer";
 import { RoutePanel } from "./RoutePanel";
+import { NavPanel } from "./NavPanel";
 import type { AppSettings, PersistedLayer } from "../state/settings";
 import type { Channel, Service } from "@foxglove/ws-protocol";
 
@@ -53,7 +54,9 @@ export class App {
   #routeLayer!: RouteLayer;
   #routePanel!: RoutePanel;
   #routeBtn!: HTMLButtonElement;
+  #navBtn!: HTMLButtonElement;
   #sidebar!: HTMLElement;
+  #nav!: NavPanel;
 
   // DOM
   #urlInput!: HTMLInputElement;
@@ -89,6 +92,20 @@ export class App {
     this.#tfLayer = new TfLayer(this.settings.tfSettings);
     this.#tfLayer.visible = this.settings.showTf;
     this.viewer.addLayer(this.#tfLayer);
+
+    this.#nav = new NavPanel({
+      conn: this.conn,
+      viewer: this.viewer,
+      tf: this.tf,
+      settings: this.settings,
+      persist: () => this.#save(),
+      toast: (msg, kind) => this.#toast(msg, kind),
+      hide: () => this.#setNavOpen(false),
+    });
+    // Docked on the right of the map; the toggle in the top bar shows or hides it.
+    root.appendChild(this.#nav.element);
+    viewEl.appendChild(this.#nav.hud);
+    this.#setNavOpen(this.settings.navOpen);
 
     this.#routeLayer = new RouteLayer(this.viewer, this.routeStore);
     this.#routeLayer.visible = false;
@@ -139,6 +156,7 @@ export class App {
   dispose(): void {
     if (this.#tickTimer) clearInterval(this.#tickTimer);
     this.#routePanel.dispose();
+    this.#nav.dispose();
     this.conn.autoReconnect = false;
     this.conn.disconnect();
     this.viewer.dispose();
@@ -188,6 +206,9 @@ export class App {
       this.#setRouteMode(!this.#routePanel.active);
     });
 
+    this.#navBtn = h("button", { class: "nav-toggle", title: "Show or hide the Navigation panel" }, icon("navigation"), "Navigation");
+    this.#navBtn.addEventListener("click", () => this.#setNavOpen(!this.settings.navOpen));
+
     const topbar = h(
       "div",
       { class: "topbar" },
@@ -204,6 +225,7 @@ export class App {
       this.#initBtn,
       resetBtn,
       this.#routeBtn,
+      this.#navBtn,
     );
 
     // Sidebar
@@ -235,32 +257,6 @@ export class App {
     this.#layersEl = h("div");
     const layersSection = section("Layers", [this.#layersEl], false, "layers");
 
-    const goalTopic = h("input", { type: "text", value: this.settings.goalTopic });
-    const initTopic = h("input", { type: "text", value: this.settings.initialPoseTopic });
-    const poseFrame = h("input", { type: "text", value: this.settings.poseFrame, placeholder: "(fixed frame)" });
-    goalTopic.addEventListener("change", () => {
-      this.settings.goalTopic = goalTopic.value.trim() || "/goal_pose";
-      this.#save();
-    });
-    initTopic.addEventListener("change", () => {
-      this.settings.initialPoseTopic = initTopic.value.trim() || "/initialpose";
-      this.#save();
-    });
-    poseFrame.addEventListener("change", () => {
-      this.settings.poseFrame = poseFrame.value.trim();
-      this.#save();
-    });
-    const toolsSection = section(
-      "Nav tools",
-      [
-        h("div", { class: "row" }, h("label", { text: "Goal topic" }), goalTopic),
-        h("div", { class: "row" }, h("label", { text: "Initial pose topic" }), initTopic),
-        h("div", { class: "row" }, h("label", { text: "Frame" }), poseFrame),
-      ],
-      true,
-      "tools",
-    );
-
     this.#versionEl = h("span", { class: "stats", text: "…" });
     this.#updateBtn = h("button", {}, icon("refresh"), "Check for updates");
     this.#updateBtn.addEventListener("click", () => void this.#checkUpdates(true));
@@ -276,7 +272,7 @@ export class App {
       "info",
     );
 
-    const sidebar = h("div", { class: "sidebar" }, viewSection, topicsSection, servicesSection, layersSection, toolsSection, aboutSection);
+    const sidebar = h("div", { class: "sidebar" }, viewSection, topicsSection, servicesSection, layersSection, aboutSection);
     this.#sidebar = sidebar;
 
     // Viewer
@@ -351,6 +347,8 @@ export class App {
     }
     const rows: HTMLElement[] = [];
     for (const ch of channels) {
+      // Action internals (include_hidden:=true) are used by Navigation, not drawn.
+      if (ch.topic.includes("/_action/")) continue;
       const supported = isSupportedSchema(ch.schemaName);
       const isTf = TF_TOPICS.has(ch.topic);
       const chk = h("input", { type: "checkbox" });
@@ -385,7 +383,7 @@ export class App {
       this.#servicesEl.replaceChildren(h("div", { class: "empty", text: "No services advertised" }));
       return;
     }
-    const rows = services.map((s) =>
+    const rows = services.filter((s) => !s.name.includes("/_action/")).map((s) =>
       h(
         "div",
         { class: "topic service", title: `${s.name}\n${s.type}` },
@@ -573,6 +571,13 @@ export class App {
     this.#goalBtn.classList.toggle("active-tool", tool === "goal");
     this.#initBtn.classList.toggle("active-tool", tool === "initialpose");
     this.#routePanel?.onToolChanged(tool);
+    this.#nav?.onToolChanged(tool);
+    const navHint = this.#nav?.hintFor(tool);
+    if (navHint) {
+      this.#hintEl.textContent = navHint;
+      this.#hintEl.hidden = false;
+      return;
+    }
     if (tool.startsWith("route.")) {
       // Route mode explains its own tools under the tool bar, where the text
       // does not sit on top of the map.
@@ -586,6 +591,15 @@ export class App {
       this.#hintEl.textContent = `${tool === "goal" ? "Nav goal" : "Initial pose"}: click position, drag for heading (frame: ${frame}). Esc to cancel.`;
       this.#hintEl.hidden = false;
     }
+  }
+
+  /** Show or hide the Navigation panel. The map resizes to the space left. */
+  #setNavOpen(open: boolean): void {
+    this.settings.navOpen = open;
+    this.#nav.element.hidden = !open;
+    this.#nav.element.parentElement?.classList.toggle("nav-open", open);
+    this.#navBtn.classList.toggle("active", open);
+    this.#save();
   }
 
   // ----- route mode --------------------------------------------------------
@@ -701,6 +715,9 @@ export class App {
   // ----- publishing --------------------------------------------------------
 
   #publishPose(r: PoseToolResult): void {
+    // Through the NavigateToPose action when the bridge exposes it, so the
+    // goal can be followed, paused and canceled; otherwise the goal topic.
+    if (r.kind === "goal" && this.#nav.goTo({ x: r.x, y: r.y, yaw: r.yaw })) return;
     const frame = this.settings.poseFrame || this.viewer.fixedFrame;
     const now = Date.now();
     const stamp = { sec: Math.floor(now / 1000), nanosec: (now % 1000) * 1e6 };

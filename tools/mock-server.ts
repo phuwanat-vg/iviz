@@ -15,6 +15,10 @@
  * forwards to a runner's HTTP API and /mission/state and /mission/event
  * republish that runner's event stream. Point it at a sim runner with
  * MISSION_RUNNER_URL (default http://127.0.0.1:8080).
+ *
+ * Nav2 is simulated in mock-nav2.ts: the hidden action services and topics of
+ * NavigateToPose, NavigateThroughPoses, FollowWaypoints and FollowPath, and
+ * /map_saver/save_map. The robot drives in a circle until it gets a goal.
  */
 import { createRequire } from "node:module";
 import { WebSocket, WebSocketServer } from "ws";
@@ -22,6 +26,7 @@ import type { IWebSocket } from "@foxglove/ws-protocol";
 import type { MessageWriter as MessageWriterT } from "@foxglove/rosmsg2-serialization";
 import { SCHEMAS, normalizeRos2MsgText } from "../src/ros/schemas";
 import type { SchemaName } from "../src/ros/schemas";
+import { createNav2Sim } from "./mock-nav2";
 
 // The @foxglove packages ship CommonJS without an "exports" map, so Node's ESM
 // loader cannot see their named exports. Load them through require() instead.
@@ -69,6 +74,9 @@ const ch = {
 };
 
 const subscribed = new Set<number>();
+
+// Nav2 action servers, a map saver and a robot that drives to its goals.
+const nav2 = createNav2Sim(server, subscribed);
 server.on("subscribe", (id) => {
   subscribed.add(id);
   console.log(`[mock] subscribe channel ${id}`);
@@ -88,6 +96,7 @@ server.on("message", ({ channel: c, data }) => {
   try {
     const reader = new MessageReader(parse(normalizeRos2MsgText(schema), { ros2: true }));
     const msg = reader.readMessage(data) as Record<string, unknown>;
+    if (c.topic === "/goal_pose") nav2.goalPose(msg);
     console.log(`[mock] client message on ${c.topic}:`, JSON.stringify(msg, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
   } catch (err) {
     console.log(`[mock] client message on ${c.topic}: decode failed`, err);
@@ -134,6 +143,7 @@ interface ApiRequest {
 }
 
 server.on("serviceCallRequest", (req, conn) => {
+  if (nav2.handleServiceCall(req, conn)) return;
   const fail = (message: string) => {
     console.log(`[mock] service call ${req.callId} failed: ${message}`);
     server.sendServiceCallFailure({ op: "serviceCallFailure", serviceId: req.serviceId, callId: req.callId, message }, conn);
@@ -260,7 +270,6 @@ const PILLARS = [
   { x: -3, y: 1, r: 0.5 },
   { x: 1, y: -3.5, r: 0.3 },
 ];
-const t0 = Date.now();
 const DRIFT = { x: 0.3, y: -0.15 }; // map -> odom offset
 
 function nowStamp() {
@@ -271,10 +280,7 @@ function nowNs(): bigint {
   return BigInt(Date.now()) * 1_000_000n;
 }
 function robotPose(): { x: number; y: number; yaw: number } {
-  const t = (Date.now() - t0) / 1000;
-  const w = 0.15;
-  const R = 3.5;
-  return { x: R * Math.cos(w * t), y: R * Math.sin(w * t), yaw: w * t + Math.PI / 2 };
+  return nav2.pose();
 }
 function yawQ(yaw: number) {
   return { x: 0, y: 0, z: Math.sin(yaw / 2), w: Math.cos(yaw / 2) };
@@ -568,17 +574,12 @@ setInterval(() => {
 
 // /plan 2 Hz, /footprint 5 Hz, /amcl_pose 2 Hz
 setInterval(() => {
-  const t = (Date.now() - t0) / 1000;
   const stamp = nowStamp();
-  const poses = [];
-  for (let i = 0; i <= 40; i++) {
-    const a = 0.15 * t + (i / 40) * (Math.PI / 2);
-    poses.push({
-      header: { stamp, frame_id: "map" },
-      pose: { position: { x: 3.5 * Math.cos(a), y: 3.5 * Math.sin(a), z: 0 }, orientation: yawQ(a + Math.PI / 2) },
-    });
+  const planned = nav2.plan();
+  if (planned) {
+    const poses = planned.map((p) => ({ header: { stamp, frame_id: "map" }, pose: { position: { x: p.x, y: p.y, z: 0 }, orientation: yawQ(p.yaw) } }));
+    send(ch.plan, "nav_msgs/msg/Path", { header: { stamp, frame_id: "map" }, poses });
   }
-  send(ch.plan, "nav_msgs/msg/Path", { header: { stamp, frame_id: "map" }, poses });
 
   const { x, y, yaw } = robotPose();
   send(ch.amcl, "geometry_msgs/msg/PoseWithCovarianceStamped", {

@@ -24,7 +24,10 @@ for new versions themselves, so this is a one-time download.
   `nav_msgs/Odometry`, `geometry_msgs/PoseStamped`, `geometry_msgs/PoseWithCovarianceStamped`,
   `geometry_msgs/PolygonStamped`
 - TF tree display with frame names, selectable fixed frame, follow-frame camera
-- Nav2 tools: **2D Nav Goal** (`/goal_pose`) and **2D Pose Estimate** (`/initialpose`) by click-and-drag
+- Nav2 tools: **2D Nav Goal** and **2D Pose Estimate** by click-and-drag, **waypoints**
+  (FollowWaypoints or NavigateThroughPoses, optional loop), **follow a drawn path**
+  (FollowPath), **pause / resume / cancel**, and **save the map** on the robot or on this PC
+  ([below](#navigation))
 - Per-topic Hz and total bandwidth readout; settings persist between runs
 - Auto-reconnect
 - **Route mode**: draw the lanes the robot may drive and say what happens at
@@ -34,11 +37,12 @@ for new versions themselves, so this is a one-time download.
 
 ```bash
 sudo apt install ros-$ROS_DISTRO-foxglove-bridge
-ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 include_hidden:=true
 ```
 
 Add it to your Nav2 / FAST-LIO2 bring-up launch file so it starts with the robot.
-No RViz2, no VNC.
+No RViz2, no VNC. `include_hidden:=true` exposes the hidden services and topics
+behind Nav2 actions, which the [Navigation](#navigation) tools need.
 
 If a point cloud is too heavy for WiFi, throttle it on the Pi with `topic_tools`
 and subscribe to the throttled topic in iViz:
@@ -86,6 +90,11 @@ A mock `foxglove_bridge` simulates a robot driving around a room and publishes
 TF, odometry, laser scan, a FAST-LIO2 style registered point cloud, a Livox
 `CustomMsg` cloud, a static map, a rolling local costmap, a plan, a footprint
 and an AMCL pose. It also logs any goal / initial pose iViz publishes.
+
+It simulates Nav2 too (`tools/mock-nav2.ts`): the four action servers the
+Navigation tools use and `/map_saver/save_map`. The robot drives in a circle
+until it receives a goal, then drives to it, so waypoints, paths, pause, resume
+and cancel can be tried end to end.
 
 ```bash
 npm run mock
@@ -195,6 +204,58 @@ iViz is one optional window onto it.
 Zone drawing, route preview (`POST /api/preview/route`), the dry-run animation
 and the live costmap/scan layers are deliberately left out of this version.
 
+## Navigation
+
+The **Navigation** panel on the right of the map and the status bar over the
+map drive Nav2 directly. They do not need mission_runner. Show or hide the
+panel with **Navigation** in the top bar or the ✕ in its header; the status bar
+keeps showing while a task runs, even with the panel hidden. The topics and
+services behind actions (`/_action/...`) are left out of the sidebar lists.
+
+| Tool | How | Nav2 interface |
+|---|---|---|
+| 2D Nav Goal | top bar, click and drag | `/navigate_to_pose` action, or `/goal_pose` when actions are hidden |
+| Waypoints | **Place**, click on the map (drag sets the heading), **Start** | `/follow_waypoints` stops at each one, `/navigate_through_poses` drives through them |
+| Follow path | **Draw**, click along the route, **Follow path** | `/follow_path` on the controller server, without the planner |
+| Pause / Resume | status bar | cancels the goal and keeps the task; Resume sends what is left |
+| Cancel | status bar | cancels every goal on the four action servers, whoever sent it |
+| Save on robot | Map | `nav2_msgs/srv/SaveMap` (map_saver) or `slam_toolbox/srv/SaveMap` |
+| Save to this PC | Map | writes `<name>.yaml` and `<name>.pgm` from `/map`, like map_saver |
+
+Waypoints and the path are kept between runs. While a tool is active,
+Backspace removes the last point and Esc ends the tool.
+
+Nav2 has no pause of its own, so **Pause** stops the robot by canceling its
+goal. **Resume** continues with the waypoint the robot was heading to, or with
+the path from the point nearest to where the robot stands (the robot frame is
+set in Setup). Goals are stamped with time zero, which tf2 reads as "the latest
+transform", so a clock difference between the PC and the robot does not get
+them rejected.
+
+### What the robot needs
+
+ROS 2 actions reach the bridge as hidden services and topics, such as
+`/navigate_to_pose/_action/send_goal` and `/navigate_to_pose/_action/status`.
+foxglove_bridge only advertises them when started with `include_hidden:=true`:
+
+```bash
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 include_hidden:=true
+```
+
+Without it, 2D Nav Goal still works over `/goal_pose`, the other tools stay
+disabled, and **Navigation → Setup** lists what is missing.
+
+Saving the map on the robot needs a map saver service. Nav2's is started with:
+
+```bash
+ros2 launch nav2_map_server map_saver_server.launch.py
+```
+
+A relative map name is written wherever map_saver runs, so an absolute path
+such as `/home/pi/maps/office` is safer. Action names, the controller and the
+goal checker ids are in **Navigation → Setup**; the defaults match nav2_bringup
+on Jazzy.
+
 ## Typical setups
 
 | Stack | Fixed frame | Layers to enable |
@@ -276,14 +337,18 @@ This produces `iViz_<version>_x64-setup.exe` plus a `.sig` file next to it; the
 ```
 src/
   net/FoxgloveConnection.ts   WebSocket client, subscriptions, service calls, CDR decoding, stats
-  ros/                        message schemas, types, TF tree, decoder cache
+  net/ActionClient.ts         ROS 2 actions over the bridge's hidden services and topics
+  ros/                        message schemas (nav2Schemas.ts for actions), types, TF tree, decoder cache
+  nav/                        Nav2 tasks with pause and resume (NavController), map export
   viz/Viewer.ts               three.js scene, cameras, controls, pose and editing tools
-  viz/layers/                 one renderer per message type, plus RouteLayer
+  viz/layers/                 one renderer per message type, plus RouteLayer and NavOverlayLayer
   ui/App.ts                   top bar, sidebar, layer settings
+  ui/NavPanel.ts              Navigation panel on the right and the status bar over the map
   ui/RoutePanel.ts            Route mode sidebar; RouteTools.ts the editing tools
   ui/ActionForm.ts            the action picker and the forms behind it
   mission/                    mission model, validation and the /mission/api client
   state/settings.ts           localStorage persistence
 tools/mock-server.ts          fake foxglove_bridge for development
+tools/mock-nav2.ts            simulated Nav2 action servers and map saver for the mock
 src-tauri/                    Tauri desktop shell
 ```

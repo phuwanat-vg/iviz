@@ -28,6 +28,18 @@ client.on("close", (e) => {
 client.on("serverInfo", (info) => {
   console.log(`[probe] server: ${info.name}  capabilities: ${info.capabilities.join(", ")}`);
 });
+// PROBE_SCHEMA=<regex> also prints the request/response schema of matching services.
+const schemaFilter = process.env.PROBE_SCHEMA ? new RegExp(process.env.PROBE_SCHEMA) : undefined;
+client.on("advertiseServices", (services) => {
+  for (const s of services) {
+    const req = s.request?.schemaName ?? (s.requestSchema !== undefined ? `${s.type}_Request` : "no schema");
+    console.log(`[probe] service ${s.name}  ${s.type}  (request: ${req})`);
+    if (schemaFilter?.test(s.name)) {
+      console.log(`  --- request ---\n${s.request?.schema ?? s.requestSchema ?? "(none)"}`);
+      console.log(`  --- response ---\n${s.response?.schema ?? s.responseSchema ?? "(none)"}`);
+    }
+  }
+});
 client.on("advertise", (channels) => {
   for (const ch of channels) {
     console.log(`[probe] topic ${ch.topic}  ${ch.schemaName}  (${ch.encoding}/${ch.schemaEncoding ?? "?"}, schema ${ch.schema.length} chars)`);

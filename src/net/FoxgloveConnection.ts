@@ -1,6 +1,7 @@
 import { FoxgloveClient } from "@foxglove/ws-protocol";
 import type { Channel, ChannelId, ClientChannelId, ServerInfo, Service, ServiceId, SubscriptionId } from "@foxglove/ws-protocol";
 import { MessageDecoder } from "../ros/MessageDecoder";
+import { fallbackServiceSchemas } from "../ros/nav2Schemas";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -67,6 +68,9 @@ export class FoxgloveConnection {
   #pubs = new Map<string, Publication>();
   #services = new Map<ServiceId, Service>();
   #servicesByName = new Map<string, Service>();
+  /** Topics whose last decoded message is kept, e.g. the map for saving. */
+  #retained = new Set<string>();
+  #latest = new Map<string, unknown>();
   #pendingCalls = new Map<number, PendingCall>();
   #nextCallId = 1;
 
@@ -305,6 +309,7 @@ export class FoxgloveConnection {
         this.#emitError(`Decode failed on ${topic} (${ch.schemaName}): ${String(err)}`);
         return;
       }
+      if (this.#retained.has(topic)) this.#latest.set(topic, decoded);
       for (const h of sub.handlers) {
         try {
           h(decoded, ch, now);
@@ -320,6 +325,7 @@ export class FoxgloveConnection {
     this.#channels.clear();
     this.#channelsByTopic.clear();
     this.#subIdToTopic.clear();
+    this.#latest.clear();
     for (const sub of this.#subs.values()) {
       sub.subscriptionId = undefined;
       sub.channelId = undefined;
@@ -379,6 +385,19 @@ export class FoxgloveConnection {
     } catch (err) {
       this.#emitError(`Subscribe failed on ${topic}: ${String(err)}`);
     }
+  }
+
+  /**
+   * Keep the last message of `topic` whenever it is subscribed by anyone.
+   * Retaining does not subscribe by itself, so it costs no bandwidth.
+   */
+  retainLatest(topic: string): void {
+    this.#retained.add(topic);
+  }
+
+  /** The last message kept for a retained topic, if one arrived. */
+  latest<T = unknown>(topic: string): T | undefined {
+    return this.#latest.get(topic) as T | undefined;
   }
 
   /** Publish a message. The topic is advertised on first use. */
@@ -514,7 +533,11 @@ export class FoxgloveConnection {
 function serviceCodec(service: Service, part: "request" | "response"): ServiceCodec | undefined {
   const def = part === "request" ? service.request : service.response;
   if (def) return def;
+  const schemaName = `${service.type}_${part === "request" ? "Request" : "Response"}`;
   const legacy = part === "request" ? service.requestSchema : service.responseSchema;
-  if (legacy === undefined) return undefined;
-  return { encoding: "cdr", schemaName: `${service.type}_${part === "request" ? "Request" : "Response"}`, schema: legacy, schemaEncoding: "ros2msg" };
+  if (legacy !== undefined) return { encoding: "cdr", schemaName, schema: legacy, schemaEncoding: "ros2msg" };
+  // No schema from the bridge: use iViz's own copy for the types it knows.
+  const known = fallbackServiceSchemas(service.type);
+  if (!known) return undefined;
+  return { encoding: "cdr", schemaName, schema: known[part], schemaEncoding: "ros2msg" };
 }

@@ -18,6 +18,11 @@
   box-sizing: border-box;
 }
 
+/* Elements hidden from code stay hidden even when a class sets display. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -37,6 +42,13 @@ body {
   grid-template-areas:
     "top top"
     "side view";
+}
+/* Navigation panel open: a third column on the right of the map. */
+#app.nav-open {
+  grid-template-columns: 320px 1fr 300px;
+  grid-template-areas:
+    "top top top"
+    "side view nav";
 }
 
 /* ---------- top bar ---------- */
@@ -1082,6 +1094,246 @@ label.inline-check {
   opacity: 0.55;
 }
 .topbar button.active {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #fff;
+}
+
+/* ---------- navigation ---------------------------------------------------- */
+.nav-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 2px 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.nav-status .text,
+.nav-hud .text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+.nav-status .detail,
+.nav-hud .detail {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.nav-chip {
+  flex: none;
+  margin-top: 1px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: #2c333f;
+  color: var(--muted);
+}
+.nav-chip.starting,
+.nav-chip.running {
+  background: rgba(61, 165, 255, 0.18);
+  color: var(--accent);
+}
+.nav-chip.paused,
+.nav-chip.canceling {
+  background: rgba(242, 177, 52, 0.18);
+  color: var(--warn);
+}
+.nav-chip.succeeded {
+  background: rgba(60, 207, 122, 0.18);
+  color: var(--ok);
+}
+.nav-chip.canceled,
+.nav-chip.aborted,
+.nav-chip.rejected,
+.nav-chip.error {
+  background: rgba(255, 90, 106, 0.16);
+  color: var(--err);
+}
+.nav-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px 0;
+}
+.nav-buttons button {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.nav-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nav-sub svg.icon {
+  width: 12px;
+  height: 12px;
+}
+.nav-sub::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+.nav-note {
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.nav-note.warn {
+  color: var(--warn);
+}
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 190px;
+  margin: 4px 0;
+  overflow-y: auto;
+}
+.nav-wp {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.nav-wp:hover {
+  background: var(--panel-2);
+}
+.nav-wp .num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--warn);
+  color: #0b0e12;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+.nav-wp.current .num {
+  background: var(--ok);
+}
+.nav-wp.done {
+  opacity: 0.5;
+}
+.nav-wp .acts {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+}
+.nav-wp:hover .acts {
+  opacity: 1;
+}
+.nav-wp .acts button {
+  padding: 1px 3px;
+}
+.nav-wp .acts svg.icon {
+  width: 12px;
+  height: 12px;
+}
+.nav-panel .row input[type="text"] {
+  width: 150px;
+  min-width: 0;
+}
+.nav-setup {
+  margin-top: 10px;
+}
+.nav-setup > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.nav-setup > summary:hover {
+  color: var(--text);
+}
+.nav-cmd {
+  margin: 4px 0;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #11151a;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+.nav-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(640px, calc(100% - 24px));
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(20, 24, 30, 0.92);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.nav-hud .text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.nav-note svg.icon {
+  width: 11px;
+  height: 11px;
+  vertical-align: -1px;
+}
+
+/* Navigation panel docked on the right */
+.nav-dock {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.nav-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nav-dock-head .title {
+  flex: 1;
+}
+.nav-dock-head > svg.icon {
+  width: 13px;
+  height: 13px;
+}
+.nav-dock-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 14px;
+}
+.topbar button.nav-toggle.active {
   background: var(--accent-2);
   border-color: var(--accent-2);
   color: #fff;

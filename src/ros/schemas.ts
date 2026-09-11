@@ -15,7 +15,9 @@ const SEP = "\n=================================================================
  * spellings, so collapse `pkg/msg/Type` to `pkg/Type` everywhere before parsing.
  */
 export function normalizeRos2MsgText(text: string): string {
-  return text.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\/msg\/([A-Za-z_][A-Za-z0-9_]*)/g, "$1/$2");
+  // Also `pkg/action/Name_Goal` and `pkg/srv/Name_Request`, which appear in
+  // the definitions of the hidden services behind ROS 2 actions.
+  return text.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\/(?:msg|srv|action)\/([A-Za-z_][A-Za-z0-9_]*)/g, "$1/$2");
 }
 
 const HEADER = `MSG: std_msgs/msg/Header

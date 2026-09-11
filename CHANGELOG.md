@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-09-12
+
+- **Navigation** panel on the right (shown or hidden from the top bar) and a status bar over the map, talking to Nav2 directly:
+  - waypoints placed on the map, run with FollowWaypoints or NavigateThroughPoses, with an optional loop
+  - a drawn path followed by the controller server (FollowPath)
+  - **Pause / Resume** (cancels the goal and sends what is left) and **Cancel** (every goal on the robot)
+  - progress: current waypoint, distance left, ETA, speed, recoveries
+  - 2D Nav Goal now goes through NavigateToPose when possible, so it can be paused and canceled
+  - **Save map** on the robot (Nav2 map_saver or slam_toolbox) or to this PC as `.yaml` + `.pgm`
+  - needs foxglove_bridge started with `include_hidden:=true`; Setup explains what is missing
+- ROS 2 action client over foxglove_bridge's hidden services, with built-in Jazzy definitions
+- The mock bridge simulates Nav2 action servers and a map saver
 
 - ROS **service calls** over the same bridge connection (`FoxgloveConnection.callService`),
   and a Services section in the sidebar listing what the robot offers

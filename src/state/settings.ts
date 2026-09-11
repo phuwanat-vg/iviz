@@ -1,4 +1,5 @@
 import type { SettingsValues } from "../viz/layers/Layer";
+import type { Pose2D } from "../nav/NavController";
 
 export interface PersistedLayer {
   topic: string;
@@ -23,7 +24,47 @@ export interface AppSettings {
   /** Route mode open, and the mission it had open. */
   routeOpen: boolean;
   routeMission: string;
+  /** Navigation panel shown on the right. */
+  navOpen: boolean;
+  nav: NavSettings;
 }
+
+export interface NavSettings {
+  /** Nav2 action names. */
+  navigateToPose: string;
+  followWaypoints: string;
+  navigateThroughPoses: string;
+  followPath: string;
+  /** Robot base frame, used to resume a path from where the robot stands. */
+  robotFrame: string;
+  controllerId: string;
+  goalCheckerId: string;
+  progressCheckerId: string;
+  waypointMode: "waypoints" | "through";
+  loop: boolean;
+  /** Frame the drafted waypoints and path were placed in. */
+  draftFrame: string;
+  waypoints: Pose2D[];
+  path: Pose2D[];
+  mapTopic: string;
+}
+
+export const DEFAULT_NAV_SETTINGS: NavSettings = {
+  navigateToPose: "/navigate_to_pose",
+  followWaypoints: "/follow_waypoints",
+  navigateThroughPoses: "/navigate_through_poses",
+  followPath: "/follow_path",
+  robotFrame: "base_link",
+  controllerId: "FollowPath",
+  goalCheckerId: "general_goal_checker",
+  progressCheckerId: "progress_checker",
+  waypointMode: "waypoints",
+  loop: false,
+  draftFrame: "",
+  waypoints: [],
+  path: [],
+  mapTopic: "/map",
+};
 
 const KEY = "iviz.settings.v1";
 
@@ -42,6 +83,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   poseFrame: "",
   routeOpen: false,
   routeMission: "",
+  navOpen: true,
+  nav: DEFAULT_NAV_SETTINGS,
 };
 
 export function loadSettings(): AppSettings {
@@ -49,9 +92,12 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [] };
+    const nav = { ...DEFAULT_NAV_SETTINGS, ...(parsed.nav ?? {}) };
+    if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
+    if (!Array.isArray(nav.path)) nav.path = [];
+    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], nav };
   } catch {
-    return { ...DEFAULT_SETTINGS };
+    return { ...DEFAULT_SETTINGS, nav: { ...DEFAULT_NAV_SETTINGS } };
   }
 }
 
