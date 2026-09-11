@@ -7,6 +7,11 @@
  * send_goal to start, the status topic to follow every goal on the server,
  * the feedback topic for progress, get_result for the outcome, and
  * cancel_goal to stop.
+ *
+ * rosidl nests the goal, result and feedback in a field (`goal`, `result`,
+ * `feedback`). foxglove_bridge describes the same types with those fields
+ * flattened next to `goal_id` / `status`. Both give the same bytes on the
+ * wire, so this client writes both shapes and reads whichever arrives.
  */
 
 import type { FoxgloveConnection } from "./FoxgloveConnection";
@@ -181,7 +186,9 @@ export class ActionClient<G, F, R> {
 
     let response: { accepted: boolean };
     try {
-      response = await this.conn.callService<{ accepted: boolean }>(this.sendGoalService, { goal_id: { uuid }, goal }, 15000);
+      // Goal fields both nested under `goal` (rosidl) and at the top level
+      // (foxglove_bridge's flattened definitions); the schema picks one.
+      response = await this.conn.callService<{ accepted: boolean }>(this.sendGoalService, { ...(goal as Record<string, unknown>), goal_id: { uuid }, goal }, 15000);
     } catch (err) {
       handle.finish({ state: "lost", note: String(err instanceof Error ? err.message : err) });
       throw err;
@@ -193,8 +200,12 @@ export class ActionClient<G, F, R> {
     handle.setState("accepted");
     // get_result answers when the goal ends, so it may stay open for a long time.
     this.conn
-      .callService<{ status: number; result: R }>(`${this.name}/_action/get_result`, { goal_id: { uuid } }, 24 * 3600 * 1000)
-      .then((r) => handle.finish({ state: STATUS_CODES[r.status] ?? "aborted", result: r.result }))
+      .callService<Record<string, unknown>>(`${this.name}/_action/get_result`, { goal_id: { uuid } }, 24 * 3600 * 1000)
+      .then((r) => {
+        const { status, result, ...flat } = r;
+        const nested = result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+        handle.finish({ state: STATUS_CODES[Number(status)] ?? "aborted", result: { ...flat, ...nested } as R });
+      })
       .catch(() => {
         /* The status topic still reports the end of the goal. */
       });
@@ -245,8 +256,9 @@ export class ActionClient<G, F, R> {
     const want = this.#handles.size > 0;
     if (want && !this.#unsubFeedback) {
       this.#unsubFeedback = this.conn.subscribe(`${this.name}/_action/feedback`, (msg) => {
-        const m = msg as FeedbackMessage<F>;
-        this.#handles.get(uuidHex(m.goal_id.uuid))?.setFeedback(m.feedback);
+        const { goal_id, feedback, ...flat } = msg as FeedbackMessage<F> & Record<string, unknown>;
+        const fields = feedback && typeof feedback === "object" ? feedback : (flat as F);
+        this.#handles.get(uuidHex(goal_id.uuid))?.setFeedback(fields);
       });
     } else if (!want && this.#unsubFeedback) {
       this.#unsubFeedback();

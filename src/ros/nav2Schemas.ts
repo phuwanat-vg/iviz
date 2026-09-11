@@ -106,10 +106,25 @@ export interface ActionSchemas {
   feedbackMessage: string;
 }
 
-/** Schemas for the hidden services and feedback topic of a known action type. */
-export function actionSchemas(actionType: string): ActionSchemas | undefined {
+/**
+ * Schemas for the hidden services and feedback topic of a known action type.
+ *
+ * `nested` follows rosidl: `{ goal_id, goal: {...} }`. `flat` is how
+ * foxglove_bridge describes the same types: the goal, result and feedback
+ * fields sit next to `goal_id` / `status`. Both encode to identical bytes.
+ */
+export function actionSchemas(actionType: string, layout: "nested" | "flat" = "nested"): ActionSchemas | undefined {
   const parts = ACTIONS[actionType];
   if (!parts) return undefined;
+  if (layout === "flat") {
+    return {
+      sendGoalRequest: build(`unique_identifier_msgs/UUID goal_id\n${parts.goal}`),
+      sendGoalResponse: "bool accepted\nbuiltin_interfaces/Time stamp",
+      getResultRequest: build("unique_identifier_msgs/UUID goal_id"),
+      getResultResponse: build(`int8 status\n${parts.result}`),
+      feedbackMessage: build(`unique_identifier_msgs/UUID goal_id\n${parts.feedback}`),
+    };
+  }
   const short = actionType.replace("/action/", "/");
   const local = {
     [`${short}_Goal`]: parts.goal,

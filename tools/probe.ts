@@ -40,9 +40,12 @@ client.on("advertiseServices", (services) => {
     }
   }
 });
+// PROBE_TOPIC_SCHEMA=<regex> prints the schema of matching topics.
+const topicSchemaFilter = process.env.PROBE_TOPIC_SCHEMA ? new RegExp(process.env.PROBE_TOPIC_SCHEMA) : undefined;
 client.on("advertise", (channels) => {
   for (const ch of channels) {
     console.log(`[probe] topic ${ch.topic}  ${ch.schemaName}  (${ch.encoding}/${ch.schemaEncoding ?? "?"}, schema ${ch.schema.length} chars)`);
+    if (topicSchemaFilter?.test(ch.topic)) console.log(`  --- schema ---\n${ch.schema}`);
     const sub = client.subscribe(ch.id);
     counts.set(sub, { topic: ch.topic, n: 0, bytes: 0 });
   }

@@ -215,7 +215,7 @@ services behind actions (`/_action/...`) are left out of the sidebar lists.
 | Tool | How | Nav2 interface |
 |---|---|---|
 | 2D Nav Goal | top bar, click and drag | `/navigate_to_pose` action, or `/goal_pose` when actions are hidden |
-| Waypoints | **Place**, click on the map (drag sets the heading), **Start** | `/follow_waypoints` stops at each one, `/navigate_through_poses` drives through them |
+| Waypoints | **Place**, click on the map (drag sets the heading), or **Robot pose** for where the robot stands; then **Start** | `/follow_waypoints` stops at each one, `/navigate_through_poses` drives through them |
 | Follow path | **Draw**, click along the route, **Follow path** | `/follow_path` on the controller server, without the planner |
 | Pause / Resume | status bar | cancels the goal and keeps the task; Resume sends what is left |
 | Cancel | status bar | cancels every goal on the four action servers, whoever sent it |

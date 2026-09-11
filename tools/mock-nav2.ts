@@ -136,7 +136,7 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
       missed_waypoints: [],
       result: { structure_needs_at_least_one_member: 0 },
     };
-    for (const w of g.waiters) reply(w, g.action.getResultResponse, { status, result: g.result }, w.conn);
+    for (const w of g.waiters) reply(w, g.action.getResultResponse, resultMessage(g), w.conn);
     g.waiters = [];
     if (active === g) active = undefined;
     publishStatus(g.action);
@@ -174,7 +174,8 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
 
   const cancelSchemas = fallbackServiceSchemas("action_msgs/srv/CancelGoal")!;
   for (const [name, type, kind] of ACTION_DEFS) {
-    const s = actionSchemas(type)!;
+    // Flattened, exactly as foxglove_bridge advertises action types.
+    const s = actionSchemas(type, "flat")!;
     const service = (suffix: string, serviceType: string, request: string, response: string): number =>
       server.addService({
         name: `${name}/_action/${suffix}`,
@@ -196,7 +197,7 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
     const sendGoal = service("send_goal", `${type}_SendGoal`, s.sendGoalRequest, s.sendGoalResponse);
     handlers.set(sendGoal, (req, conn) => {
       const m = codec(s.sendGoalRequest).reader.readMessage(req.data) as Msg;
-      const accepted = startGoal(action, Uint8Array.from(m.goal_id.uuid), posesFromGoal(kind, m.goal));
+      const accepted = startGoal(action, Uint8Array.from(m.goal_id.uuid), posesFromGoal(kind, m.goal ?? m));
       reply(req, s.sendGoalResponse, { accepted, stamp: stampNow() }, conn);
     });
 
@@ -205,7 +206,7 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
       const m = codec(s.getResultRequest).reader.readMessage(req.data) as Msg;
       const g = action.goals.get(hex(m.goal_id.uuid));
       if (!g) reply(req, s.getResultResponse, { status: 0, result: {} }, conn);
-      else if (g.status >= STATUS.SUCCEEDED) reply(req, s.getResultResponse, { status: g.status, result: g.result }, conn);
+      else if (g.status >= STATUS.SUCCEEDED) reply(req, s.getResultResponse, resultMessage(g), conn);
       else g.waiters.push({ serviceId: req.serviceId, callId: req.callId, conn });
     });
 
@@ -312,7 +313,8 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
       default:
         feedback = { distance_to_goal: d, speed: SPEED };
     }
-    publish(g.action.feedbackChannel, g.action.feedbackSchema, { goal_id: { uuid: g.uuid }, feedback });
+    // Both shapes, so the message fits a flattened or a nested schema.
+    publish(g.action.feedbackChannel, g.action.feedbackSchema, { ...feedback, goal_id: { uuid: g.uuid }, feedback });
   }, 100);
 
   setInterval(() => actions.forEach(publishStatus), 500);
@@ -351,6 +353,11 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
       return true;
     },
   };
+}
+
+/** A get_result response in both shapes (flattened fields and a nested `result`). */
+function resultMessage(g: SimGoal): Msg {
+  return { ...g.result, status: g.status, result: g.result };
 }
 
 function posesFromGoal(kind: Kind, goal: Msg): Pose[] {

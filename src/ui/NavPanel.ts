@@ -92,6 +92,7 @@ export class NavPanel {
   #hudCancel!: HTMLButtonElement;
   #hudDismiss!: HTMLButtonElement;
   #placeBtn!: HTMLButtonElement;
+  #robotPoseBtn!: HTMLButtonElement;
   #wpUndo!: HTMLButtonElement;
   #wpClear!: HTMLButtonElement;
   #wpList!: HTMLElement;
@@ -192,6 +193,8 @@ export class NavPanel {
     // Waypoints
     this.#placeBtn = h("button", { title: "Click on the map to place waypoints, drag to set the heading" }, icon("mapPin"), "Place");
     this.#placeBtn.addEventListener("click", () => this.#toggleTool(TOOL_WAYPOINT));
+    this.#robotPoseBtn = h("button", { title: "Add a waypoint where the robot is now, facing the way it faces" }, icon("locate"), "Robot pose");
+    this.#robotPoseBtn.addEventListener("click", () => this.#addRobotPose());
     this.#wpUndo = iconButton("undo", "Remove the last waypoint", () => this.#undo("waypoints"));
     this.#wpClear = iconButton("trash", "Remove all waypoints", () => this.#clear("waypoints"));
     this.#wpList = h("div", { class: "nav-list" });
@@ -288,7 +291,7 @@ export class NavPanel {
       this.#status.el,
       h("div", { class: "nav-buttons" }, this.#pauseBtn, this.#cancelBtn),
       subHeader("Waypoints", "waypoints"),
-      h("div", { class: "nav-buttons" }, this.#placeBtn, this.#wpUndo, this.#wpClear),
+      h("div", { class: "nav-buttons" }, this.#placeBtn, this.#robotPoseBtn, this.#wpUndo, this.#wpClear),
       this.#wpList,
       row("Mode", this.#modeSel),
       row("Loop", this.#loopChk),
@@ -369,6 +372,7 @@ export class NavPanel {
     const wpKind: TaskKind = nav.waypointMode === "through" ? "through" : "waypoints";
     const wpReason = c.unavailableReason(wpKind);
     const nWp = nav.waypoints.length;
+    this.#robotPoseBtn.disabled = !connected;
     this.#wpUndo.disabled = nWp === 0;
     this.#wpClear.disabled = nWp === 0;
     this.#loopChk.disabled = wpKind === "through";
@@ -587,6 +591,20 @@ export class NavPanel {
     if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) < 0.05) return;
     const yaw = prev ? Math.atan2(p.y - prev.y, p.x - prev.x) : 0;
     this.#editDraft(() => path.push({ x: p.x, y: p.y, yaw }));
+  }
+
+  /** Append the robot's current position and heading as a waypoint. */
+  #addRobotPose(): void {
+    const nav = this.#nav;
+    const empty = nav.waypoints.length === 0 && nav.path.length === 0;
+    const frame = empty ? this.#goalFrame() : nav.draftFrame || this.#goalFrame();
+    const pose = this.#robotPose(frame);
+    if (!pose) {
+      this.#host.toast(`The robot's position is not known: no transform from ${nav.robotFrame} to ${frame}. Check Robot frame in Setup.`);
+      return;
+    }
+    if (empty) nav.draftFrame = frame;
+    this.#editDraft(() => nav.waypoints.push(pose));
   }
 
   #undo(list: DraftList): void {
