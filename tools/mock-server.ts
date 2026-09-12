@@ -75,6 +75,12 @@ const ch = {
 
 const subscribed = new Set<number>();
 
+// `--no-localization` imitates AMCL before it has an initial pose: there is no
+// map -> odom transform, so the map frame is in no TF tree until iViz sends a
+// pose estimate on /initialpose.
+const NO_LOCALIZATION = process.argv.includes("--no-localization");
+let localized = !NO_LOCALIZATION;
+
 // Advertised but never published, to exercise the inactive-topic filter.
 server.addChannel({ topic: "/mock_inactive", encoding: "cdr", schemaName: "std_msgs/msg/String", schema: "string data", schemaEncoding: "ros2msg" });
 
@@ -100,6 +106,10 @@ server.on("message", ({ channel: c, data }) => {
     const reader = new MessageReader(parse(normalizeRos2MsgText(schema), { ros2: true }));
     const msg = reader.readMessage(data) as Record<string, unknown>;
     if (c.topic === "/goal_pose") nav2.goalPose(msg);
+    if (c.topic === "/initialpose" && !localized) {
+      localized = true;
+      console.log("[mock] initial pose received, publishing map -> odom from now on");
+    }
     console.log(`[mock] client message on ${c.topic}:`, JSON.stringify(msg, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
   } catch (err) {
     console.log(`[mock] client message on ${c.topic}: decode failed`, err);
@@ -387,11 +397,15 @@ setInterval(() => {
   const stamp = nowStamp();
   send(ch.tf, "tf2_msgs/msg/TFMessage", {
     transforms: [
-      {
-        header: { stamp, frame_id: "map" },
-        child_frame_id: "odom",
-        transform: { translation: { x: DRIFT.x, y: DRIFT.y, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } },
-      },
+      ...(localized
+        ? [
+            {
+              header: { stamp, frame_id: "map" },
+              child_frame_id: "odom",
+              transform: { translation: { x: DRIFT.x, y: DRIFT.y, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } },
+            },
+          ]
+        : []),
       {
         header: { stamp, frame_id: "odom" },
         child_frame_id: "base_link",

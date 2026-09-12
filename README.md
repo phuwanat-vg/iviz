@@ -235,6 +235,16 @@ set in Setup). Goals are stamped with time zero, which tf2 reads as "the latest
 transform", so a clock difference between the PC and the robot does not get
 them rejected.
 
+### Before the robot is localized
+
+AMCL waits for an initial pose, and until it has one it publishes no
+map -> odom transform. The map frame then belongs to no TF tree, so iViz shows
+the view in the frame the map message names, draws the map, and marks the
+Navigation panel **Not localized**. Click **2D Pose Estimate** on the map and
+drag for the heading; the pose goes out in the map frame, the only frame AMCL
+accepts. The robot and the sensor layers appear once map -> odom starts
+flowing.
+
 ### What the robot needs
 
 ROS 2 actions reach the bridge as hidden services and topics, such as

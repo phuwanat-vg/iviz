@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.4 — 2026-09-12
+
+- Works before AMCL is localized. Until an initial pose is set there is no
+  map → odom transform, so the map frame belongs to no TF tree and the map
+  could not be shown, which left nothing to click a pose estimate on. iViz
+  now takes the fixed frame from the map message itself when TF does not know
+  that frame yet, and the frame menu lists frames seen in data as well as in TF
+- **2D Pose Estimate** is always sent in the global frame. A click is in the
+  fixed frame, so the point is transformed when TF allows it, and iViz says so
+  when it cannot (AMCL rejects an initial pose that is not in the map frame)
+- The Navigation panel shows **Not localized** with what to do about it while
+  the map and the robot are not connected by TF
+- `npm run mock -- --no-localization` starts the mock without map → odom and
+  publishes it once iViz sends an initial pose, like AMCL
+
 ## 0.2.3 — 2026-09-12
 
 - The map arrives on its own. `/map` is latched, so a client that connects

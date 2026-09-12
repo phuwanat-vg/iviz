@@ -56,6 +56,8 @@ export interface NavPanelHost {
   toast(message: string, kind?: "error" | "info"): void;
   /** Close the panel; the status bar over the map keeps working. */
   hide(): void;
+  /** The frame Nav2 plans in, usually the frame the map is published in. */
+  globalFrame(): string;
 }
 
 interface StatusView {
@@ -421,6 +423,9 @@ export class NavPanel {
     if (c.phase === "idle") {
       const n = c.foreignGoals;
       if (n > 0) return { cls: "running", label: "Busy", title: `${n} Nav2 goal${n === 1 ? "" : "s"} from another client`, detail: "Cancel stops them" };
+      if (this.#notLocalized()) {
+        return { cls: "paused", label: "Not localized", title: "The robot does not know where it is on the map", detail: "Use 2D Pose Estimate on the map" };
+      }
       const reason = this.#host.conn.state !== "connected" ? "Not connected" : c.unavailableReason("goal");
       return { cls: "", label: "Idle", title: reason || "Ready", detail: "" };
     }
@@ -436,6 +441,20 @@ export class NavPanel {
     if (p.recoveries) parts.push(`${p.recoveries} recover${p.recoveries === 1 ? "y" : "ies"}`);
     if (c.foreignGoals > 0) parts.push(`+${c.foreignGoals} other goal${c.foreignGoals === 1 ? "" : "s"}`);
     return { cls: c.phase, label: PHASE_LABEL[c.phase], title, detail: parts.join(" · ") };
+  }
+
+  /**
+   * A map is on screen but nothing links it to the robot: AMCL is waiting for
+   * an initial pose, so nothing can be navigated yet.
+   */
+  #notLocalized(): boolean {
+    const { conn, tf } = this.#host;
+    if (conn.state !== "connected") return false;
+    const global = this.#host.globalFrame();
+    const robot = this.#nav.robotFrame;
+    if (!global || !tf.hasFrame(robot)) return false;
+    if (!tf.hasFrame(global)) return true;
+    return !tf.lookup(global, robot, _m);
   }
 
   #renderList(): void {

@@ -22,6 +22,10 @@ import { NavPanel } from "./NavPanel";
 import { fetchMap, findMapService } from "../nav/mapSource";
 import type { AppSettings, PersistedLayer } from "../state/settings";
 import type { Channel, Service } from "@foxglove/ws-protocol";
+import { Matrix4, Vector3 } from "three";
+
+const _pose = new Matrix4();
+const _point = new Vector3();
 
 interface ActiveLayer {
   layer: Layer;
@@ -52,6 +56,7 @@ export class App {
   #layers = new Map<string, ActiveLayer>();
   #tfLayer: TfLayer;
   #tfVersionSeen = -1;
+  #mapFrameSeen = "";
   #routeLayer!: RouteLayer;
   #routePanel!: RoutePanel;
   #routeBtn!: HTMLButtonElement;
@@ -102,6 +107,7 @@ export class App {
       persist: () => this.#save(),
       toast: (msg, kind) => this.#toast(msg, kind),
       hide: () => this.#setNavOpen(false),
+      globalFrame: () => this.#globalFrame(),
     });
     // Docked on the right of the map; the toggle in the top bar shows or hides it.
     root.appendChild(this.#nav.element);
@@ -734,14 +740,48 @@ export class App {
     this.#routeBtn.title = reason === "" ? "Draw the route graph and build missions" : `Route mode is unavailable: ${reason}`;
   }
 
+  /** The frame the subscribed map is in, e.g. `map`, even without any TF. */
+  #mapFrame(): string | undefined {
+    const preferred = this.#layers.get(this.settings.nav.mapTopic)?.layer;
+    const candidates = preferred ? [preferred] : [];
+    for (const active of this.#layers.values()) {
+      if (normalizeSchemaName(active.layer.schemaName) !== "nav_msgs/OccupancyGrid") continue;
+      if (active.layer.topic.includes("costmap")) continue;
+      candidates.push(active.layer);
+    }
+    return candidates.find((l) => l.frameId !== "")?.frameId;
+  }
+
+  /**
+   * The global frame Nav2 works in. Until AMCL is localized there is no
+   * transform between the map and the robot, but the map message still names
+   * its frame, and an initial pose has to be sent in that frame.
+   */
+  #globalFrame(): string {
+    return this.#mapFrame() ?? (this.tf.hasFrame("map") ? "map" : this.viewer.fixedFrame);
+  }
+
   #applyFixedFrame(): void {
-    const wanted = this.settings.fixedFrame || this.tf.suggestFixedFrame() || this.viewer.fixedFrame || "map";
+    // Before AMCL publishes map -> odom, the map frame is in no TF tree. Show
+    // the view in the map's own frame anyway, otherwise the map stays hidden
+    // and there is nothing to click a 2D Pose Estimate on.
+    const mapFrame = this.#mapFrame();
+    const disconnectedMap = mapFrame !== undefined && !this.tf.hasFrame(mapFrame);
+    const auto = disconnectedMap ? mapFrame : (this.tf.suggestFixedFrame() ?? mapFrame);
+    const wanted = this.settings.fixedFrame || auto || this.viewer.fixedFrame || "map";
     this.viewer.setFixedFrame(wanted);
   }
 
   #refreshFrameSelects(): void {
-    const frames = this.tf.frames();
-    const suggested = this.tf.suggestFixedFrame();
+    // Frames named by the data as well as by TF, so the map frame can be
+    // picked while AMCL is still unlocalized.
+    const tfFrames = this.tf.frames();
+    const extra = new Set<string>();
+    for (const active of this.#layers.values()) {
+      if (active.layer.frameId && !tfFrames.includes(active.layer.frameId)) extra.add(active.layer.frameId);
+    }
+    const frames = [...tfFrames, ...extra].sort();
+    const suggested = this.#mapFrame() && !this.tf.hasFrame(this.#mapFrame()!) ? this.#mapFrame() : this.tf.suggestFixedFrame();
     const fixedOpts = [h("option", { value: "", text: `auto${suggested ? ` (${suggested})` : ""}` })];
     for (const f of frames) fixedOpts.push(h("option", { value: f, text: f }));
     if (this.settings.fixedFrame && !frames.includes(this.settings.fixedFrame)) {
@@ -766,6 +806,13 @@ export class App {
       this.#refreshFrameSelects();
       this.#applyFixedFrame();
     }
+    // The map names its frame even when TF does not know it yet.
+    const mapFrame = this.#mapFrame() ?? "";
+    if (mapFrame !== this.#mapFrameSeen) {
+      this.#mapFrameSeen = mapFrame;
+      this.#refreshFrameSelects();
+      this.#applyFixedFrame();
+    }
     for (const [topic, el] of this.#hzEls) {
       const st = this.conn.topicStats(topic);
       el.textContent = st && st.hz > 0 ? `${st.hz.toFixed(st.hz < 10 ? 1 : 0)} Hz` : "";
@@ -786,12 +833,27 @@ export class App {
     // Through the NavigateToPose action when the bridge exposes it, so the
     // goal can be followed, paused and canceled; otherwise the goal topic.
     if (r.kind === "goal" && this.#nav.goTo({ x: r.x, y: r.y, yaw: r.yaw })) return;
-    const frame = this.settings.poseFrame || this.viewer.fixedFrame;
+    let frame = this.settings.poseFrame || this.viewer.fixedFrame;
+    let { x, y, yaw } = r;
+    if (r.kind === "initialpose") {
+      // A click is in the fixed frame, but AMCL only accepts an initial pose
+      // in the global frame, so move the point over when TF allows it.
+      const global = this.#globalFrame();
+      if (global !== frame) {
+        const moved = this.#transformPoint(x, y, yaw, frame, global);
+        if (moved) {
+          ({ x, y, yaw } = moved);
+          frame = global;
+        } else {
+          this.#toast(`Sending the initial pose in ${frame}, but AMCL expects ${global}. Set the fixed frame to ${global} and click on the map.`);
+        }
+      }
+    }
     const now = Date.now();
     const stamp = { sec: Math.floor(now / 1000), nanosec: (now % 1000) * 1e6 };
     const pose = {
-      position: { x: r.x, y: r.y, z: 0 },
-      orientation: { x: 0, y: 0, z: Math.sin(r.yaw / 2), w: Math.cos(r.yaw / 2) },
+      position: { x, y, z: 0 },
+      orientation: { x: 0, y: 0, z: Math.sin(yaw / 2), w: Math.cos(yaw / 2) },
     };
     let ok: boolean;
     if (r.kind === "goal") {
@@ -810,8 +872,17 @@ export class App {
       });
     }
     if (ok) {
-      this.#toast(`${r.kind === "goal" ? "Goal" : "Initial pose"} sent: (${r.x.toFixed(2)}, ${r.y.toFixed(2)}) yaw ${((r.yaw * 180) / Math.PI).toFixed(0)}° in ${frame}`, "info");
+      this.#toast(`${r.kind === "goal" ? "Goal" : "Initial pose"} sent: (${x.toFixed(2)}, ${y.toFixed(2)}) yaw ${((yaw * 180) / Math.PI).toFixed(0)}° in ${frame}`, "info");
     }
+  }
+
+  /** Move a planar pose from one frame to another; undefined when unconnected. */
+  #transformPoint(x: number, y: number, yaw: number, from: string, to: string): { x: number; y: number; yaw: number } | undefined {
+    if (from === to) return { x, y, yaw };
+    if (!this.tf.lookup(to, from, _pose)) return undefined;
+    _point.set(x, y, 0).applyMatrix4(_pose);
+    const e = _pose.elements;
+    return { x: _point.x, y: _point.y, yaw: yaw + Math.atan2(e[1]!, e[0]!) };
   }
 
   // ----- updates -----------------------------------------------------------
