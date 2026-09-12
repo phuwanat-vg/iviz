@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 — 2026-09-12
+
+- The side panel is now tabbed: **Navigation**, **Services**, **Dashboard**,
+  switched in its header or with **Panel** in the top bar
+- **Services** tab: call any service the robot offers. The request form is
+  generated from the schema the bridge sends, the response is shown as it comes
+  back, and a filled-in call can be pinned to the Dashboard as a button
+- **Dashboard** tab: answer what the robot asks. mission_runner's `ask_user`
+  question arrives on `/mission/event` and the buttons answer it through
+  `/mission/answer` or the `/mission/api` tunnel, which lets the step continue.
+  A pending question also appears over the map, with its default option and a
+  countdown; answered questions are listed with it. Pinned service buttons live
+  here too
+- `npm run mock -- --prompt` asks a question every 20 s and serves
+  `/mission/answer`, so the Dashboard works without mission_runner
+
 ## 0.2.4 — 2026-09-12
 
 - Works before AMCL is localized. Until an initial pose is set there is no
@@ -60,7 +76,6 @@
   - needs foxglove_bridge started with `include_hidden:=true`; Setup explains what is missing
 - ROS 2 action client over foxglove_bridge's hidden services, with built-in Jazzy definitions
 - The mock bridge simulates Nav2 action servers and a map saver
-
 - ROS **service calls** over the same bridge connection (`FoxgloveConnection.callService`),
   and a Services section in the sidebar listing what the robot offers
 - **Route mode** for drawing a route graph and building missions is present but

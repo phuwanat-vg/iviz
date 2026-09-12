@@ -27,6 +27,7 @@ import type { MessageWriter as MessageWriterT } from "@foxglove/rosmsg2-serializ
 import { SCHEMAS, normalizeRos2MsgText } from "../src/ros/schemas";
 import type { SchemaName } from "../src/ros/schemas";
 import { createNav2Sim } from "./mock-nav2";
+import { createPromptSim } from "./mock-prompts";
 
 // The @foxglove packages ship CommonJS without an "exports" map, so Node's ESM
 // loader cannot see their named exports. Load them through require() instead.
@@ -149,6 +150,14 @@ const missionApiId = server.addService({
 const missionRequestReader = new MessageReader(parse(MISSION_API_REQUEST, { ros2: true }));
 const missionResponseWriter = new MessageWriter(parse(MISSION_API_RESPONSE, { ros2: true }));
 
+// mission_runner's ask_user step, so the Dashboard can be tried without a
+// runner: `--prompt` asks a question every 20 s and serves /mission/answer.
+const prompts = createPromptSim(
+  server,
+  (event) => send(ch.missionEvent, "std_msgs/msg/String", { data: JSON.stringify(event) }),
+  process.argv.includes("--prompt"),
+);
+
 interface ApiRequest {
   method: string;
   path: string;
@@ -157,6 +166,7 @@ interface ApiRequest {
 
 server.on("serviceCallRequest", (req, conn) => {
   if (nav2.handleServiceCall(req, conn)) return;
+  if (prompts.handleServiceCall(req, conn)) return;
   const fail = (message: string) => {
     console.log(`[mock] service call ${req.callId} failed: ${message}`);
     server.sendServiceCallFailure({ op: "serviceCallFailure", serviceId: req.serviceId, callId: req.callId, message }, conn);

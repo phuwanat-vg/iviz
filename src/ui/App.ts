@@ -19,7 +19,11 @@ import { RouteStore } from "../mission/RouteStore";
 import { RouteLayer } from "../viz/layers/RouteLayer";
 import { RoutePanel } from "./RoutePanel";
 import { NavPanel } from "./NavPanel";
+import { ServicePanel } from "./ServicePanel";
+import { DashboardPanel } from "./DashboardPanel";
 import { fetchMap, findMapService } from "../nav/mapSource";
+import type { DockTab } from "../state/settings";
+import type { IconName } from "./icons";
 import type { AppSettings, PersistedLayer } from "../state/settings";
 import type { Channel, Service } from "@foxglove/ws-protocol";
 import { Matrix4, Vector3 } from "three";
@@ -61,6 +65,10 @@ export class App {
   #routePanel!: RoutePanel;
   #routeBtn!: HTMLButtonElement;
   #navBtn!: HTMLButtonElement;
+  #services!: ServicePanel;
+  #dashboard!: DashboardPanel;
+  #dock!: HTMLElement;
+  #tabButtons = new Map<DockTab, HTMLButtonElement>();
   #sidebar!: HTMLElement;
   #nav!: NavPanel;
 
@@ -106,13 +114,28 @@ export class App {
       settings: this.settings,
       persist: () => this.#save(),
       toast: (msg, kind) => this.#toast(msg, kind),
-      hide: () => this.#setNavOpen(false),
       globalFrame: () => this.#globalFrame(),
     });
-    // Docked on the right of the map; the toggle in the top bar shows or hides it.
-    root.appendChild(this.#nav.element);
+    this.#services = new ServicePanel({
+      conn: this.conn,
+      settings: this.settings,
+      persist: () => this.#save(),
+      toast: (msg, kind) => this.#toast(msg, kind),
+      onPinsChanged: () => this.#dashboard.refresh(),
+    });
+    this.#dashboard = new DashboardPanel({
+      conn: this.conn,
+      settings: this.settings,
+      missionApi: this.missionApi,
+      persist: () => this.#save(),
+      toast: (msg, kind) => this.#toast(msg, kind),
+    });
+    // One dock on the right of the map with a tab per panel.
+    this.#dock = this.#buildDock();
+    root.appendChild(this.#dock);
     viewEl.appendChild(this.#nav.hud);
-    this.#setNavOpen(this.settings.navOpen);
+    viewEl.appendChild(this.#dashboard.card);
+    this.#setDock(this.settings.navOpen ? this.settings.dockTab : null);
 
     this.#routeLayer = new RouteLayer(this.viewer, this.routeStore);
     this.#routeLayer.visible = false;
@@ -164,6 +187,8 @@ export class App {
     if (this.#tickTimer) clearInterval(this.#tickTimer);
     this.#routePanel.dispose();
     this.#nav.dispose();
+    this.#services.dispose();
+    this.#dashboard.dispose();
     this.conn.autoReconnect = false;
     this.conn.disconnect();
     this.viewer.dispose();
@@ -213,8 +238,8 @@ export class App {
       this.#setRouteMode(!this.#routePanel.active);
     });
 
-    this.#navBtn = h("button", { class: "nav-toggle", title: "Show or hide the Navigation panel" }, icon("navigation"), "Navigation");
-    this.#navBtn.addEventListener("click", () => this.#setNavOpen(!this.settings.navOpen));
+    this.#navBtn = h("button", { class: "nav-toggle", title: "Show or hide the side panel: Navigation, Services, Dashboard" }, icon("panelRight"), "Panel");
+    this.#navBtn.addEventListener("click", () => this.#setDock(this.settings.navOpen ? null : this.settings.dockTab));
 
     const topbar = h(
       "div",
@@ -667,12 +692,40 @@ export class App {
     }
   }
 
-  /** Show or hide the Navigation panel. The map resizes to the space left. */
-  #setNavOpen(open: boolean): void {
+  #buildDock(): HTMLElement {
+    const tabs: [DockTab, string, IconName][] = [
+      ["nav", "Navigation", "navigation"],
+      ["services", "Services", "services"],
+      ["dashboard", "Dashboard", "bot"],
+    ];
+    const strip = h("div", { class: "dock-tabs" });
+    for (const [tab, label, iconName] of tabs) {
+      const button = h("button", { class: "dock-tab", title: label }, icon(iconName), label);
+      button.addEventListener("click", () => this.#setDock(tab));
+      this.#tabButtons.set(tab, button);
+      strip.appendChild(button);
+    }
+    const close = h("button", { class: "icon-only", title: "Hide this panel" }, icon("close"));
+    close.addEventListener("click", () => this.#setDock(null));
+    const body = h("div", { class: "dock-body" }, this.#nav.element, this.#services.element, this.#dashboard.element);
+    return h("aside", { class: "dock" }, h("div", { class: "dock-head" }, strip, close), body);
+  }
+
+  /** Show one tab of the side panel, or hide it. The map takes the space left. */
+  #setDock(tab: DockTab | null): void {
+    const open = tab !== null;
     this.settings.navOpen = open;
-    this.#nav.element.hidden = !open;
-    this.#nav.element.parentElement?.classList.toggle("nav-open", open);
+    if (tab) this.settings.dockTab = tab;
+    const active = this.settings.dockTab;
+    this.#dock.hidden = !open;
+    this.#dock.parentElement?.classList.toggle("nav-open", open);
+    for (const [name, button] of this.#tabButtons) button.classList.toggle("active", open && name === active);
+    this.#nav.element.hidden = active !== "nav";
+    this.#services.element.hidden = active !== "services";
+    this.#dashboard.element.hidden = active !== "dashboard";
     this.#navBtn.classList.toggle("active", open);
+    if (open && active === "services") this.#services.refresh();
+    if (open && active === "dashboard") this.#dashboard.refresh();
     this.#save();
   }
 

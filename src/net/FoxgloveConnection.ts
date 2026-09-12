@@ -2,6 +2,7 @@ import { FoxgloveClient } from "@foxglove/ws-protocol";
 import type { Channel, ChannelId, ClientChannelId, ServerInfo, Service, ServiceId, SubscriptionId } from "@foxglove/ws-protocol";
 import { MessageDecoder } from "../ros/MessageDecoder";
 import { fallbackServiceSchemas } from "../ros/nav2Schemas";
+import type { MessageDefinition } from "@foxglove/message-definition";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -476,6 +477,26 @@ export class FoxgloveConnection {
    * response. Rejects with a descriptive Error when the bridge has no such
    * service, reports a failure, disconnects, or does not answer in time.
    */
+  /**
+   * The parsed request and response definitions of a service, for building a
+   * form. Undefined when the service or its request schema is unknown.
+   */
+  serviceDefinitions(name: string): { request: MessageDefinition[]; response: MessageDefinition[] } | undefined {
+    const service = this.#servicesByName.get(name);
+    if (!service) return undefined;
+    const req = serviceCodec(service, "request");
+    if (!req) return undefined;
+    const res = serviceCodec(service, "response");
+    try {
+      return {
+        request: this.decoder.parseDefinitions(req.schema, req.schemaEncoding),
+        response: res ? this.decoder.parseDefinitions(res.schema, res.schemaEncoding) : [],
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   async callService<T = unknown>(name: string, request: unknown, timeoutMs = 30000): Promise<T> {
     const client = this.#client;
     if (!client || this.#state !== "connected") throw new Error(`Cannot call ${name}: not connected`);

@@ -28,7 +28,22 @@ export interface AppSettings {
   navOpen: boolean;
   /** List topics that nothing publishes right now. */
   showInactiveTopics: boolean;
+  /** Which tab the right-hand panel shows. */
+  dockTab: DockTab;
+  /** Service calls pinned as buttons on the dashboard. */
+  servicePins: ServicePin[];
   nav: NavSettings;
+}
+
+export type DockTab = "nav" | "services" | "dashboard";
+
+/** A service call saved as a dashboard button. */
+export interface ServicePin {
+  label: string;
+  service: string;
+  type: string;
+  /** The request as JSON text, exactly as it was filled in. */
+  request: string;
 }
 
 export interface NavSettings {
@@ -92,6 +107,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   routeMission: "",
   navOpen: true,
   showInactiveTopics: false,
+  dockTab: "nav",
+  servicePins: [],
   nav: DEFAULT_NAV_SETTINGS,
 };
 
@@ -112,6 +129,7 @@ export function loadSettings(): AppSettings {
     nav.idsRevision = 2;
     if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
     if (!Array.isArray(nav.path)) nav.path = [];
+    if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
     return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], nav };
   } catch {
     return { ...DEFAULT_SETTINGS, nav: { ...DEFAULT_NAV_SETTINGS } };

@@ -1338,3 +1338,249 @@ label.inline-check {
   border-color: var(--accent-2);
   color: #fff;
 }
+
+/* ---------- right-hand dock with tabs ------------------------------------ */
+.dock {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.dock-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.dock-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+}
+.dock-tab {
+  flex: 1 1 auto;
+  justify-content: center;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.dock-tab svg.icon {
+  width: 13px;
+  height: 13px;
+}
+.dock-tab.active {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+  color: #fff;
+}
+.dock-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 14px;
+}
+
+/* ---------- services tab ------------------------------------------------- */
+.svc-panel .row input[type="text"] {
+  width: 100%;
+}
+.svc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  margin: 6px 0;
+  overflow-y: auto;
+}
+.svc-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 3px 6px;
+  text-align: left;
+}
+.svc-item.active {
+  background: #2c333f;
+  border-color: var(--accent);
+}
+.svc-item .name {
+  font-family: var(--mono);
+  font-size: 11px;
+  word-break: break-all;
+}
+.svc-item .type {
+  font-size: 10px;
+  color: var(--muted);
+}
+.svc-detail:not(:empty) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.svc-head .name {
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+.svc-head .type {
+  padding-bottom: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.svc-response {
+  max-height: 220px;
+  margin: 6px 0 0;
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #11151a;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.svc-response.failed {
+  border-color: var(--err);
+  color: #ffd0d6;
+}
+
+/* ---------- generated request form -------------------------------------- */
+.msg-form .row label {
+  flex: 0 0 38%;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+}
+.msg-type {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.msg-form input[type="text"],
+.msg-form input[type="number"] {
+  width: 104px;
+}
+.msg-json {
+  width: 132px;
+  font-family: var(--mono);
+}
+.msg-pair {
+  display: flex;
+  gap: 4px;
+}
+.msg-pair input {
+  width: 66px;
+}
+.msg-group {
+  margin: 4px 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.msg-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.msg-group > summary .name {
+  font-family: var(--mono);
+}
+.msg-group > summary .type {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* ---------- dashboard tab ----------------------------------------------- */
+.dash-prompt {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.dash-prompt .question,
+.prompt-card .question {
+  font-size: 13px;
+}
+.dash-prompt .detail,
+.prompt-card .detail {
+  padding-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.dash-history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0;
+}
+.dash-answered {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+.dash-answered .answer {
+  font-weight: 600;
+  color: var(--ok);
+}
+.dash-answered .text {
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-answered .by {
+  font-size: 10px;
+  color: var(--muted);
+}
+.dash-pins {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-pin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dash-pin .pin-call {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.dash-pin .result {
+  max-width: 86px;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-pin .result.failed {
+  color: var(--err);
+}
+
+/* The pending question, over the map so it is not missed. */
+.prompt-card {
+  position: absolute;
+  left: 50%;
+  top: 56px;
+  transform: translateX(-50%);
+  min-width: 280px;
+  max-width: min(520px, calc(100% - 24px));
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: rgba(20, 28, 40, 0.95);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}

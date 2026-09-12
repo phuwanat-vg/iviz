@@ -1,5 +1,5 @@
 /**
- * The Navigation panel on the right of the map and the status bar over it.
+ * The Navigation tab of the right-hand dock, and the status bar over the map.
  *
  * Waypoints and a path are drafted on the map with two viewer tools, stored in
  * the settings so they survive a restart, and handed to NavController to run.
@@ -54,8 +54,6 @@ export interface NavPanelHost {
   settings: AppSettings;
   persist(): void;
   toast(message: string, kind?: "error" | "info"): void;
-  /** Close the panel; the status bar over the map keeps working. */
-  hide(): void;
   /** The frame Nav2 plans in, usually the frame the map is published in. */
   globalFrame(): string;
 }
@@ -318,14 +316,8 @@ export class NavPanel {
       this.#mapNote,
       setup,
     );
-    const header = h(
-      "div",
-      { class: "nav-dock-head" },
-      icon("navigation"),
-      h("span", { class: "title", text: "Navigation" }),
-      iconButton("close", "Hide the Navigation panel", () => this.#host.hide()),
-    );
-    return h("aside", { class: "nav-dock" }, header, h("div", { class: "nav-dock-body" }, body));
+    // The dock around it supplies the title, the tabs and the close button.
+    return body;
   }
 
   #buildHud(): HTMLElement {

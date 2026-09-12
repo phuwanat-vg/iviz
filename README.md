@@ -28,6 +28,10 @@ for new versions themselves, so this is a one-time download.
   (FollowWaypoints or NavigateThroughPoses, optional loop), **follow a drawn path**
   (FollowPath), **pause / resume / cancel**, and **save the map** on the robot or on this PC
   ([below](#navigation))
+- **Services** tab: call any service the robot offers, with the request form
+  built from its schema, and pin a filled-in call to the Dashboard as a button
+- **Dashboard** tab: answer mission_runner's questions with a button, on the
+  panel and over the map ([below](#services-and-the-dashboard))
 - Per-topic Hz and total bandwidth readout; settings persist between runs
 - The topic list shows only topics that something publishes, from the bridge's
   connection graph; **View → Show inactive topics** lists the rest
@@ -270,6 +274,31 @@ controller, goal checker and progress checker names are in **Navigation →
 Setup**. The action names match nav2_bringup on Jazzy. The plugin names are
 empty by default, which makes controller_server use the one it loaded; fill
 them in only when it loads several (its error message lists the names).
+
+## Services and the Dashboard
+
+The side panel on the right has three tabs, switched in its header or with the
+**Panel** button in the top bar.
+
+**Services** lists what the robot offers and calls any of it: pick a service,
+fill in the form iViz builds from the schema the bridge sends, press **Call**
+and read the response. **Pin** puts that filled-in call on the Dashboard as a
+button, so clearing a costmap or starting a routine is one click. Pins are
+saved with the settings. The hidden services behind ROS 2 actions are left out
+of the list unless you ask for them.
+
+**Dashboard** answers what the robot asks. A bridge client cannot serve ROS
+services, so nothing on the robot can call iViz directly; mission_runner does
+the waiting there instead. Its `ask_user` step publishes the question on
+`/mission/event` and blocks until an answer arrives through `/mission/answer`
+(`mission_msgs/srv/Answer`) or the `/mission/api` tunnel, and that is what
+these buttons send. A pending question also appears over the map, with the
+default option emphasised and a countdown when the step has a timeout;
+answered questions are listed underneath.
+
+Without mission_runner the Dashboard says so, and the pinned buttons keep
+working. To try it without a robot, `npm run mock -- --prompt` asks a question
+every 20 seconds and serves `/mission/answer` the way the runner does.
 
 ## Typical setups
 
