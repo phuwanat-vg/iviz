@@ -32,10 +32,26 @@ export interface AppSettings {
   dockTab: DockTab;
   /** Service calls pinned as buttons on the dashboard. */
   servicePins: ServicePin[];
+  /** The ask/answer topics iViz shares with any other answerer. */
+  ask: AskSettings;
   nav: NavSettings;
 }
 
 export type DockTab = "nav" | "services" | "dashboard";
+
+/**
+ * Where requests for a human decision arrive and where answers go. Any node
+ * can use the same two topics, so iViz can be replaced by an adapter later.
+ */
+export interface AskSettings {
+  requestTopic: string;
+  answerTopic: string;
+}
+
+export const DEFAULT_ASK_SETTINGS: AskSettings = {
+  requestTopic: "/iviz/request",
+  answerTopic: "/iviz/answer",
+};
 
 /** A service call saved as a dashboard button. */
 export interface ServicePin {
@@ -109,6 +125,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showInactiveTopics: false,
   dockTab: "nav",
   servicePins: [],
+  ask: DEFAULT_ASK_SETTINGS,
   nav: DEFAULT_NAV_SETTINGS,
 };
 
@@ -130,7 +147,8 @@ export function loadSettings(): AppSettings {
     if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
     if (!Array.isArray(nav.path)) nav.path = [];
     if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
-    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], nav };
+    const ask = { ...DEFAULT_ASK_SETTINGS, ...(parsed.ask ?? {}) };
+    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], ask, nav };
   } catch {
     return { ...DEFAULT_SETTINGS, nav: { ...DEFAULT_NAV_SETTINGS } };
   }

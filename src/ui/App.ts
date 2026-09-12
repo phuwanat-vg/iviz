@@ -22,6 +22,7 @@ import { NavPanel } from "./NavPanel";
 import { ServicePanel } from "./ServicePanel";
 import { DashboardPanel } from "./DashboardPanel";
 import { fetchMap, findMapService } from "../nav/mapSource";
+import { AskChannel } from "../nav/AskChannel";
 import type { DockTab } from "../state/settings";
 import type { IconName } from "./icons";
 import type { AppSettings, PersistedLayer } from "../state/settings";
@@ -56,6 +57,8 @@ export class App {
   /** mission_runner over the same bridge connection; idle until it is there. */
   readonly missionApi = new MissionApi(this.conn);
   readonly routeStore = new RouteStore();
+  /** The ask/answer topics anything can use, iViz included. */
+  readonly askChannel: AskChannel;
 
   #layers = new Map<string, ActiveLayer>();
   #tfLayer: TfLayer;
@@ -94,6 +97,7 @@ export class App {
 
   constructor(root: HTMLElement) {
     this.settings = loadSettings();
+    this.askChannel = new AskChannel(this.conn, () => this.settings.ask);
     const viewEl = this.#buildDom(root);
     this.viewer = new Viewer(viewEl, this.tf);
     this.viewer.setMode(this.settings.mode);
@@ -127,6 +131,7 @@ export class App {
       conn: this.conn,
       settings: this.settings,
       missionApi: this.missionApi,
+      ask: this.askChannel,
       persist: () => this.#save(),
       toast: (msg, kind) => this.#toast(msg, kind),
     });
@@ -189,6 +194,7 @@ export class App {
     this.#nav.dispose();
     this.#services.dispose();
     this.#dashboard.dispose();
+    this.askChannel.stop();
     this.conn.autoReconnect = false;
     this.conn.disconnect();
     this.viewer.dispose();

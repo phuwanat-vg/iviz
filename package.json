@@ -1,7 +1,7 @@
 {
   "name": "iviz",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "iViz - lightweight ROS2 visualization for Windows over Foxglove WebSocket bridge",
   "type": "module",
   "scripts": {

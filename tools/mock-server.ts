@@ -72,6 +72,8 @@ const ch = {
   amcl: channel("/amcl_pose", "geometry_msgs/msg/PoseWithCovarianceStamped"),
   missionState: channel("/mission/state", "std_msgs/msg/String"),
   missionEvent: channel("/mission/event", "std_msgs/msg/String"),
+  askRequest: channel("/iviz/request", "std_msgs/msg/String"),
+  askAnswer: channel("/iviz/answer", "std_msgs/msg/String"),
 };
 
 const subscribed = new Set<number>();
@@ -80,6 +82,9 @@ const subscribed = new Set<number>();
 // map -> odom transform, so the map frame is in no TF tree until iViz sends a
 // pose estimate on /initialpose.
 const NO_LOCALIZATION = process.argv.includes("--no-localization");
+// `--auto-answer` stands in for a node of the user's that answers iViz's
+// requests, which is how the contract is meant to work in production.
+const AUTO_ANSWER = process.argv.includes("--auto-answer");
 let localized = !NO_LOCALIZATION;
 
 // Advertised but never published, to exercise the inactive-topic filter.
@@ -107,6 +112,15 @@ server.on("message", ({ channel: c, data }) => {
     const reader = new MessageReader(parse(normalizeRos2MsgText(schema), { ros2: true }));
     const msg = reader.readMessage(data) as Record<string, unknown>;
     if (c.topic === "/goal_pose") nav2.goalPose(msg);
+    if (c.topic === "/iviz/request" && AUTO_ANSWER) {
+      const body = JSON.parse(String(msg.data ?? "{}")) as { id?: string; options?: string[] };
+      const answer = body.options?.[0] ?? "Continue";
+      console.log(`[mock] adapter will answer "${answer}" for ${body.id} in 3 s`);
+      setTimeout(() => {
+        send(ch.askAnswer, "std_msgs/msg/String", { data: JSON.stringify({ id: body.id, answer, by: "mock-adapter" }) });
+        console.log(`[mock] adapter answered "${answer}" for ${body.id}`);
+      }, 3000);
+    }
     if (c.topic === "/initialpose" && !localized) {
       localized = true;
       console.log("[mock] initial pose received, publishing map -> odom from now on");
@@ -675,3 +689,26 @@ setInterval(() => {
     },
   });
 }, 200);
+
+// `--ask` publishes a question on the shared request topic every 25 s, so iViz
+// can be tried as the answering side of the ask/answer contract. Answers show
+// up in this log, because any client publish is decoded and printed.
+if (process.argv.includes("--ask")) {
+  let asked = 0;
+  setInterval(() => {
+    asked += 1;
+    const id = `mock-${asked}`;
+    console.log(`[mock] asking on /iviz/request: ${id}`);
+    send(ch.askRequest, "std_msgs/msg/String", {
+      data: JSON.stringify({
+        id,
+        text: "Part placed on the fixture?",
+        options: ["Continue", "Stop"],
+        default: "Continue",
+        station: "Station A",
+        source: "mock",
+        timeout_s: 120,
+      }),
+    });
+  }, 25_000);
+}

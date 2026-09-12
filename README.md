@@ -300,6 +300,66 @@ Without mission_runner the Dashboard says so, and the pinned buttons keep
 working. To try it without a robot, `npm run mock -- --prompt` asks a question
 every 20 seconds and serves `/mission/answer` the way the runner does.
 
+## Asking for a decision
+
+Some steps need a person: the robot arrives at a station and waits until
+someone confirms the part is in place. iViz answers that, and it answers it in
+a way that something else can take over later, because the exchange is two
+plain `std_msgs/String` topics carrying JSON.
+
+| Topic | Direction | Payload |
+|---|---|---|
+| `/iviz/request` | robot to whoever answers | `{"id", "text", "options", ["default"], ["timeout_s"], ["station"], ["source"]}` |
+| `/iviz/answer` | answerer back to the robot | `{"id", "answer", ["by"]}` |
+
+The asking side publishes a request and waits for an answer with the same
+`id`. The **Dashboard** tab shows every pending request with one button per
+option, and also over the map so it is not missed. **Answer by hand** sends
+any answer for any id, including one iViz never saw, which is how a robot-side
+step is tried out before its real answering node exists. Both topics are
+configurable in that tab.
+
+Because nothing in the contract mentions iViz, a node, a PLC adapter or a
+button box can answer instead, and the asking side does not change.
+
+On the robot, asking is a dozen lines:
+
+```python
+import json, uuid, rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+
+class Ask(Node):
+    def __init__(self):
+        super().__init__("ask_demo")
+        self.answers = {}
+        self.pub = self.create_publisher(String, "/iviz/request", 10)
+        self.create_subscription(String, "/iviz/answer", self.on_answer, 10)
+
+    def ask(self, text, options):
+        rid = uuid.uuid4().hex[:8]
+        body = {"id": rid, "text": text, "options": options, "source": "ask_demo"}
+        self.pub.publish(String(data=json.dumps(body)))
+        return rid
+
+    def on_answer(self, msg):
+        body = json.loads(msg.data)
+        self.answers[body["id"]] = body.get("answer")
+```
+
+mission_runner's `ask_user` step is the same idea with a service to answer on
+(`/mission/answer`), and the Dashboard drives that too when the runner is
+there.
+
+To try it without a robot:
+
+```bash
+npm run mock -- 8765 --ask --auto-answer
+```
+
+`--ask` asks a question every 25 seconds, and `--auto-answer` answers requests
+that iViz publishes, standing in for a node of yours.
+
 ## Typical setups
 
 | Stack | Fixed frame | Layers to enable |

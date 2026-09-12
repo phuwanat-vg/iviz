@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 — 2026-09-13
+
+- Answering what the robot asks no longer needs mission_runner. Requests
+  arrive on `/iviz/request` and answers go back on `/iviz/answer`, both
+  `std_msgs/String` carrying JSON, so any node can ask and anything can
+  answer. iViz stands in until the real answering node exists, and is dropped
+  in favour of it without the asking side changing ([README](README.md#asking-for-a-decision))
+- The Dashboard lists every pending request with a button per option, shows it
+  over the map, and **Answer by hand** sends any answer for any id, even one
+  iViz never saw. Both topics are set in that tab
+- The mock bridge takes `--ask` (a question every 25 s) and `--auto-answer`
+  (answers iViz's own requests, as a node of yours would)
+
 ## 0.3.0 — 2026-09-12
 
 - The side panel is now tabbed: **Navigation**, **Services**, **Dashboard**,

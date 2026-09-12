@@ -13,9 +13,10 @@
 import type { FoxgloveConnection } from "../net/FoxgloveConnection";
 import type { MissionApi, Prompt, RunnerEvent } from "../mission/MissionApi";
 import type { AppSettings, ServicePin } from "../state/settings";
-import { h } from "./dom";
+import { h, row } from "./dom";
 import { icon } from "./icons";
 import { pretty } from "./ServicePanel";
+import type { AskChannel, AskRequest } from "../nav/AskChannel";
 
 const ANSWER_SERVICE = "/mission/answer";
 
@@ -23,6 +24,8 @@ export interface DashboardHost {
   conn: FoxgloveConnection;
   settings: AppSettings;
   missionApi: MissionApi;
+  /** Requests from any node, answered with the same buttons. */
+  ask: AskChannel;
   persist(): void;
   toast(message: string, kind?: "error" | "info"): void;
 }
@@ -48,15 +51,42 @@ export class DashboardPanel {
   #promptEl: HTMLElement;
   #historyEl: HTMLElement;
   #noteEl: HTMLElement;
+  #simId: HTMLInputElement;
+  #simAnswer: HTMLInputElement;
+  #simNote: HTMLElement;
   #disposers: (() => void)[] = [];
   #timer?: ReturnType<typeof setInterval>;
 
   constructor(host: DashboardHost) {
     this.#host = host;
-    this.#promptEl = h("div", { class: "dash-prompt" });
+    this.#promptEl = h("div", { class: "dash-prompts" });
     this.#pinsEl = h("div", { class: "dash-pins" });
     this.#historyEl = h("div", { class: "dash-history" });
     this.#noteEl = h("div", { class: "nav-note" });
+    // Answer something by hand, for trying a robot-side step out before the
+    // real answering node exists.
+    this.#simId = h("input", { type: "text", placeholder: "last request" });
+    this.#simAnswer = h("input", { type: "text", placeholder: "Continue" });
+    this.#simNote = h("div", { class: "nav-note" });
+    const quick = ["Continue", "Stop", "Retry", "Yes", "No"].map((label) => {
+      const button = h("button", {}, label);
+      button.addEventListener("click", () => this.#sendSimulated(label));
+      return button;
+    });
+    const send = h("button", { class: "primary" }, icon("send"), "Send");
+    send.addEventListener("click", () => this.#sendSimulated(this.#simAnswer.value.trim() || "Continue"));
+
+    const topicField = (value: string, placeholder: string, apply: (v: string) => void): HTMLInputElement => {
+      const input = h("input", { type: "text", value, placeholder });
+      input.addEventListener("change", () => {
+        apply(input.value.trim());
+        host.persist();
+        host.ask.start();
+        this.#render();
+      });
+      return input;
+    };
+
     this.element = h(
       "div",
       { class: "dash-panel" },
@@ -64,14 +94,30 @@ export class DashboardPanel {
       this.#promptEl,
       this.#noteEl,
       this.#historyEl,
+      h("div", { class: "nav-sub" }, icon("send"), "Answer by hand"),
+      row("Request id", this.#simId),
+      row("Answer", this.#simAnswer),
+      h("div", { class: "nav-buttons" }, ...quick),
+      h("div", { class: "nav-buttons" }, send),
+      this.#simNote,
       h("div", { class: "nav-sub" }, icon("services"), "Buttons"),
       this.#pinsEl,
+      h("div", { class: "nav-sub" }, icon("topics"), "Topics"),
+      row("Requests", topicField(host.settings.ask.requestTopic, "/iviz/request", (v) => (host.settings.ask.requestTopic = v))),
+      row("Answers", topicField(host.settings.ask.answerTopic, "/iviz/answer", (v) => (host.settings.ask.answerTopic = v))),
+      h("div", {
+        class: "nav-note",
+        text: "Requests are std_msgs/String JSON: {id, text, options}. Answers go back as {id, answer}. Anything can ask or answer, so a node of yours can replace iViz later.",
+      }),
     );
     this.card = h("div", { class: "prompt-card" });
     this.card.hidden = true;
 
     // Questions arrive on the runner's live stream, with or without Route mode.
     host.missionApi.startLiveState();
+    // …and from anything that uses the plain request topic.
+    host.ask.start();
+    this.#disposers.push(host.ask.onChange(() => this.#renderPrompt()));
     this.#disposers.push(
       host.missionApi.onStatus((status) => {
         if (status.prompt) this.#remember(status.prompt);
@@ -195,12 +241,19 @@ export class DashboardPanel {
 
   #renderPrompt(): void {
     const prompt = this.#prompt;
-    this.#promptEl.replaceChildren(...(prompt ? this.#promptBlock(prompt) : [h("div", { class: "empty", text: "Nothing is waiting for an answer" })]));
-    this.card.replaceChildren(...(prompt ? this.#promptBlock(prompt) : []));
-    this.card.hidden = !prompt;
+    // A stop of iViz's own is shown over the map by the Navigation tab.
+    const requests = this.#host.ask.pending.filter((r) => r.source !== "iviz");
+    const blocks: HTMLElement[] = [];
+    if (prompt) blocks.push(h("div", { class: "dash-prompt" }, ...this.#promptBlock(prompt)));
+    for (const request of requests) blocks.push(h("div", { class: "dash-prompt" }, ...this.#requestBlock(request)));
+    this.#promptEl.replaceChildren(...(blocks.length > 0 ? blocks : [h("div", { class: "empty", text: "Nothing is waiting for an answer" })]));
+
+    const firstCard = prompt ? this.#promptBlock(prompt) : requests[0] ? this.#requestBlock(requests[0]) : [];
+    this.card.replaceChildren(...firstCard);
+    this.card.hidden = firstCard.length === 0;
 
     const reason = this.#host.conn.state !== "connected" ? "Not connected" : this.#host.missionApi.unavailableReason;
-    this.#noteEl.textContent = reason ? `Questions come from mission_runner's ask_user step. ${reason}.` : "";
+    this.#noteEl.textContent = reason ? `mission_runner's ask_user questions need it reachable. ${reason}. Requests on ${this.#host.settings.ask.requestTopic} still work.` : "";
     this.#noteEl.hidden = this.#noteEl.textContent === "";
     this.#noteEl.classList.toggle("warn", reason !== "" && this.#host.conn.state === "connected");
   }
@@ -232,6 +285,55 @@ export class DashboardPanel {
       button.disabled = this.#answering !== "";
       if (this.#answering === option) button.textContent = `${option}…`;
       button.addEventListener("click", () => void this.#answer(option));
+      return button;
+    });
+    parts.push(h("div", { class: "nav-buttons" }, ...buttons));
+    return parts;
+  }
+
+  /**
+   * Publish an answer for whatever the robot is waiting on, even when iViz
+   * never saw the request. This is the mock in "iViz stands in for the real
+   * answering node".
+   */
+  #sendSimulated(answer: string): void {
+    const { ask, settings } = this.#host;
+    const id = this.#simId.value.trim() || ask.lastRequestId;
+    if (id === "") {
+      this.#simNote.textContent = `No request has arrived yet. Type the id the robot is waiting for, or leave it empty once one shows up.`;
+      this.#simNote.classList.add("warn");
+      return;
+    }
+    const sent = ask.answer(id, answer);
+    this.#simNote.classList.toggle("warn", !sent);
+    this.#simNote.textContent = sent
+      ? `Sent "${answer}" for ${id} on ${settings.ask.answerTopic}`
+      : `Could not publish on ${settings.ask.answerTopic}. Connect first.`;
+    if (!sent) return;
+    this.#simAnswer.value = answer;
+    this.#record({ text: `answer for ${id}`, answer, by: "you", at: Date.now() });
+    this.#renderHistory();
+  }
+
+  /** A request from any node on the request topic. */
+  #requestBlock(request: AskRequest): HTMLElement[] {
+    const parts: HTMLElement[] = [h("div", { class: "question", text: request.text })];
+    const meta: string[] = [];
+    if (request.station) meta.push(request.station);
+    if (request.source) meta.push(`from ${request.source}`);
+    if (request.timeoutSec) meta.push(`${request.timeoutSec} s to answer`);
+    if (meta.length > 0) parts.push(h("div", { class: "detail", text: meta.join(" · ") }));
+    const buttons = request.options.map((option) => {
+      const button = h("button", { class: option === request.default ? "primary" : "" }, option);
+      button.addEventListener("click", () => {
+        const sent = this.#host.ask.answer(request.id, option);
+        if (!sent) {
+          this.#host.toast(`Could not publish the answer on ${this.#host.settings.ask.answerTopic}`);
+          return;
+        }
+        this.#record({ text: request.text, answer: option, by: "you", at: Date.now() });
+        this.#renderHistory();
+      });
       return button;
     });
     parts.push(h("div", { class: "nav-buttons" }, ...buttons));

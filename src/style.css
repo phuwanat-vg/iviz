@@ -1584,3 +1584,10 @@ label.inline-check {
   background: rgba(20, 28, 40, 0.95);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
+
+/* ---------- incoming requests ------------------------------------------- */
+.dash-prompts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
