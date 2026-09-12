@@ -40,7 +40,7 @@ const port = Number(process.argv[2] ?? 8765);
 
 const server = new FoxgloveServer({
   name: "iviz-mock-bridge",
-  capabilities: ["clientPublish", "services", "connectionGraph"],
+  capabilities: ["clientPublish", "services", "connectionGraph", "parameters", "parametersSubscribe"],
   supportedEncodings: ["cdr"],
 });
 
@@ -101,6 +101,45 @@ server.on("unsubscribe", (id) => {
   console.log(`[mock] unsubscribe channel ${id}`);
 });
 server.on("error", (err) => console.error("[mock] error", err));
+
+// A handful of parameters, named the way a Nav2 robot names them, so the
+// Parameters tab has something to set. They live in memory only, exactly like
+// parameters on a running node.
+const parameters = new Map<string, unknown>([
+  ["/controller_server.controller_frequency", 20.0],
+  ["/controller_server.FollowPath.max_vel_x", 0.26],
+  ["/controller_server.FollowPath.max_vel_theta", 1.0],
+  ["/controller_server.FollowPath.xy_goal_tolerance", 0.25],
+  ["/controller_server.use_sim_time", false],
+  ["/planner_server.expected_planner_frequency", 20.0],
+  ["/planner_server.GridBased.tolerance", 0.5],
+  ["/local_costmap/local_costmap.inflation_layer.inflation_radius", 0.55],
+  ["/local_costmap/local_costmap.robot_radius", 0.22],
+  ["/global_costmap/global_costmap.robot_radius", 0.22],
+  ["/amcl.max_particles", 2000],
+  ["/amcl.robot_model_type", "nav2_amcl::DifferentialMotionModel"],
+  ["/bt_navigator.default_nav_to_pose_bt_xml", "navigate_to_pose_w_replanning_and_recovery.xml"],
+]);
+
+server.on("getParameters", (request, conn) => {
+  const names = request.parameterNames.length > 0 ? request.parameterNames : [...parameters.keys()];
+  const values = names.filter((n) => parameters.has(n)).map((n) => ({ name: n, value: parameters.get(n) as never }));
+  console.log(`[mock] getParameters ${request.parameterNames.length === 0 ? "(all)" : request.parameterNames.join(", ")} -> ${values.length}`);
+  if (conn) server.publishParameterValues(values, request.id, conn);
+});
+
+server.on("setParameters", (request, conn) => {
+  const applied = request.parameters.map((p) => {
+    // Nodes clamp what they will not take; max_vel_x stands in for that here.
+    let value = p.value as unknown;
+    if (p.name.endsWith("max_vel_x") && typeof value === "number") value = Math.min(value, 1.0);
+    parameters.set(p.name, value);
+    console.log(`[mock] setParameter ${p.name} = ${JSON.stringify(value)}`);
+    return { name: p.name, value: value as never };
+  });
+  if (conn) server.publishParameterValues(applied, request.id, conn);
+  server.updateParameterValues(applied);
+});
 server.on("advertise", (c) => console.log(`[mock] client advertised ${c.topic} (${c.schemaName})`));
 server.on("message", ({ channel: c, data }) => {
   const schema = (SCHEMAS as Record<string, string>)[c.schemaName] ?? c.schema;

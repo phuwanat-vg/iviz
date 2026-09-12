@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 — 2026-09-13
+
+- **Parameters** tab: read every parameter of every node and set it on the
+  running robot, for trying values. Nothing is written to a file
+- A value the node clamps or refuses is reported with what it kept instead
+- **Changed parameters (N)** summarises everything touched in this session
+  with its earlier value, puts one or all of them back, and hands the list
+  over as `ros2 param set` lines
+- The mock bridge serves parameters, and clamps `max_vel_x` at 1.0 so the
+  refused-value path can be tried
+
 ## 0.4.0 — 2026-09-13
 
 - Answering what the robot asks no longer needs mission_runner. Requests

@@ -300,6 +300,25 @@ Without mission_runner the Dashboard says so, and the pinned buttons keep
 working. To try it without a robot, `npm run mock -- --prompt` asks a question
 every 20 seconds and serves `/mission/answer` the way the runner does.
 
+## Parameters
+
+The **Parameters** tab reads every parameter of every node through the bridge
+and sets them on the running robot. Nothing is written to a file: this is for
+trying a value while watching the robot, the way `ros2 param set` does, and a
+node restart brings its old value back.
+
+- **Load parameters** reads them all; the search box filters by node or name,
+  and each node is a group you open.
+- Editing a value sends it at once. The box turns green when the node took it
+  and red when it did not, and iViz says what the node kept instead, since a
+  node may clamp or refuse a value.
+- **Changed parameters (N)** is the summary of everything touched in this
+  session, with what each one was before, a button to put one back, one to put
+  them all back, and the same list as `ros2 param set` lines to keep.
+
+It needs a bridge with the `parameters` capability, which foxglove_bridge has
+by default. Updates made by anyone else appear here too.
+
 ## Asking for a decision
 
 Some steps need a person: the robot arrives at a station and waits until

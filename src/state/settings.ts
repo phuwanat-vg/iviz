@@ -37,7 +37,7 @@ export interface AppSettings {
   nav: NavSettings;
 }
 
-export type DockTab = "nav" | "services" | "dashboard";
+export type DockTab = "nav" | "services" | "dashboard" | "params";
 
 /**
  * Where requests for a human decision arrive and where answers go. Any node

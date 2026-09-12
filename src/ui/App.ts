@@ -21,6 +21,7 @@ import { RoutePanel } from "./RoutePanel";
 import { NavPanel } from "./NavPanel";
 import { ServicePanel } from "./ServicePanel";
 import { DashboardPanel } from "./DashboardPanel";
+import { ParamPanel } from "./ParamPanel";
 import { fetchMap, findMapService } from "../nav/mapSource";
 import { AskChannel } from "../nav/AskChannel";
 import type { DockTab } from "../state/settings";
@@ -70,6 +71,7 @@ export class App {
   #navBtn!: HTMLButtonElement;
   #services!: ServicePanel;
   #dashboard!: DashboardPanel;
+  #params!: ParamPanel;
   #dock!: HTMLElement;
   #tabButtons = new Map<DockTab, HTMLButtonElement>();
   #sidebar!: HTMLElement;
@@ -135,6 +137,7 @@ export class App {
       persist: () => this.#save(),
       toast: (msg, kind) => this.#toast(msg, kind),
     });
+    this.#params = new ParamPanel({ conn: this.conn, toast: (msg, kind) => this.#toast(msg, kind) });
     // One dock on the right of the map with a tab per panel.
     this.#dock = this.#buildDock();
     root.appendChild(this.#dock);
@@ -194,6 +197,7 @@ export class App {
     this.#nav.dispose();
     this.#services.dispose();
     this.#dashboard.dispose();
+    this.#params.dispose();
     this.askChannel.stop();
     this.conn.autoReconnect = false;
     this.conn.disconnect();
@@ -703,6 +707,7 @@ export class App {
       ["nav", "Navigation", "navigation"],
       ["services", "Services", "services"],
       ["dashboard", "Dashboard", "bot"],
+      ["params", "Parameters", "settings"],
     ];
     const strip = h("div", { class: "dock-tabs" });
     for (const [tab, label, iconName] of tabs) {
@@ -713,7 +718,7 @@ export class App {
     }
     const close = h("button", { class: "icon-only", title: "Hide this panel" }, icon("close"));
     close.addEventListener("click", () => this.#setDock(null));
-    const body = h("div", { class: "dock-body" }, this.#nav.element, this.#services.element, this.#dashboard.element);
+    const body = h("div", { class: "dock-body" }, this.#nav.element, this.#services.element, this.#dashboard.element, this.#params.element);
     return h("aside", { class: "dock" }, h("div", { class: "dock-head" }, strip, close), body);
   }
 
@@ -729,9 +734,11 @@ export class App {
     this.#nav.element.hidden = active !== "nav";
     this.#services.element.hidden = active !== "services";
     this.#dashboard.element.hidden = active !== "dashboard";
+    this.#params.element.hidden = active !== "params";
     this.#navBtn.classList.toggle("active", open);
     if (open && active === "services") this.#services.refresh();
     if (open && active === "dashboard") this.#dashboard.refresh();
+    if (open && active === "params") this.#params.refresh();
     this.#save();
   }
 

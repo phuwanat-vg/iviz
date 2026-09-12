@@ -1359,12 +1359,14 @@ label.inline-check {
   display: flex;
   flex: 1;
   min-width: 0;
+  flex-wrap: wrap;
   gap: 4px;
 }
 .dock-tab {
   flex: 1 1 auto;
   justify-content: center;
-  padding: 4px 6px;
+  padding: 3px 5px;
+  gap: 4px;
   font-size: 11px;
 }
 .dock-tab svg.icon {
@@ -1590,4 +1592,100 @@ label.inline-check {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* ---------- parameters tab ---------------------------------------------- */
+.param-panel .row label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-panel .row input[type="text"],
+.param-panel .row input[type="number"] {
+  width: 118px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.param-panel > .row input[type="text"] {
+  width: 100%;
+}
+.param-panel input.changed {
+  border-color: var(--ok);
+}
+.param-panel input.failed {
+  border-color: var(--err);
+}
+.param-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+.param-node {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.param-node > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.param-node > summary .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-node > summary .count {
+  font-size: 10px;
+  color: var(--muted);
+}
+.param-changed {
+  margin: 6px 0;
+  padding: 4px 6px;
+  border: 1px solid var(--accent-2);
+  border-radius: 6px;
+}
+.param-changed > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--accent);
+}
+.param-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+}
+.param-change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.param-change .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.param-change .was {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.param-change .now {
+  color: var(--ok);
 }

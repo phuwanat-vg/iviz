@@ -1,5 +1,5 @@
 import { FoxgloveClient } from "@foxglove/ws-protocol";
-import type { Channel, ChannelId, ClientChannelId, ServerInfo, Service, ServiceId, SubscriptionId } from "@foxglove/ws-protocol";
+import type { Channel, ChannelId, ClientChannelId, Parameter, ServerInfo, Service, ServiceId, SubscriptionId } from "@foxglove/ws-protocol";
 import { MessageDecoder } from "../ros/MessageDecoder";
 import { fallbackServiceSchemas } from "../ros/nav2Schemas";
 import type { MessageDefinition } from "@foxglove/message-definition";
@@ -75,6 +75,10 @@ export class FoxgloveConnection {
   /** Publisher count per topic, from the bridge's connection graph. */
   #publishers = new Map<string, number>();
   #graphSubscribed = false;
+  /** Parameter reads and writes waiting for the bridge to answer. */
+  #paramCalls = new Map<string, { resolve: (p: Parameter[]) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  #paramListeners = new Set<(parameters: Parameter[]) => void>();
+  #nextParamId = 1;
   #pendingCalls = new Map<number, PendingCall>();
   #nextCallId = 1;
 
@@ -237,6 +241,18 @@ export class FoxgloveConnection {
       for (const name of update.removedTopics) changed = this.#publishers.delete(name) || changed;
       if (changed) this.#emitChannels();
     });
+    client.on("parameterValues", (event) => {
+      if (this.#ws !== ws) return;
+      const pending = event.id === undefined ? undefined : this.#paramCalls.get(event.id);
+      if (pending) {
+        clearTimeout(pending.timer);
+        this.#paramCalls.delete(event.id!);
+        pending.resolve(event.parameters);
+        return;
+      }
+      // Unasked-for values are live updates of parameters someone changed.
+      for (const l of this.#paramListeners) l(event.parameters);
+    });
     client.on("status", (status) => {
       if (status.level >= 2) this.#emitError(`Server: ${status.message}`);
     });
@@ -354,6 +370,11 @@ export class FoxgloveConnection {
     this.#latest.clear();
     this.#publishers.clear();
     this.#graphSubscribed = false;
+    for (const call of this.#paramCalls.values()) {
+      clearTimeout(call.timer);
+      call.reject(new Error("The connection closed before the bridge answered"));
+    }
+    this.#paramCalls.clear();
     for (const sub of this.#subs.values()) {
       sub.subscriptionId = undefined;
       sub.channelId = undefined;
@@ -477,6 +498,76 @@ export class FoxgloveConnection {
    * response. Rejects with a descriptive Error when the bridge has no such
    * service, reports a failure, disconnects, or does not answer in time.
    */
+  // ----- parameters --------------------------------------------------------
+
+  /** The bridge can read and write ROS parameters. */
+  get supportsParameters(): boolean {
+    return this.#serverInfo?.capabilities.includes("parameters") ?? false;
+  }
+
+  /** The bridge pushes parameter changes made by anyone. */
+  get supportsParameterUpdates(): boolean {
+    return this.#serverInfo?.capabilities.includes("parametersSubscribe") ?? false;
+  }
+
+  /** Read parameters; an empty list asks for every parameter of every node. */
+  async getParameters(names: string[] = [], timeoutMs = 20000): Promise<Parameter[]> {
+    return await this.#parameterCall((id, client) => client.getParameters(names, id), "Reading parameters", timeoutMs);
+  }
+
+  /**
+   * Set parameters on the running nodes. Nothing is written to a file. The
+   * values that come back are what the nodes actually hold, which is not the
+   * requested value when a node clamps or refuses it.
+   */
+  async setParameters(parameters: Parameter[], timeoutMs = 20000): Promise<Parameter[]> {
+    const names = parameters.map((p) => p.name);
+    try {
+      return await this.#parameterCall((id, client) => client.setParameters(parameters, id), "Setting parameters", 3000);
+    } catch (err) {
+      // Not every bridge echoes a set; read the values back instead.
+      if (!(err instanceof Error) || !err.message.includes("did not answer")) throw err;
+      return await this.getParameters(names, timeoutMs);
+    }
+  }
+
+  /** Called with parameters that changed on the robot, from anyone. */
+  onParameterUpdate(listener: (parameters: Parameter[]) => void): () => void {
+    this.#paramListeners.add(listener);
+    return () => this.#paramListeners.delete(listener);
+  }
+
+  /** Ask the bridge to push changes of these parameters (empty = all). */
+  subscribeParameterUpdates(names: string[] = []): void {
+    if (!this.#client || !this.supportsParameterUpdates) return;
+    try {
+      this.#client.subscribeParameterUpdates(names);
+    } catch (err) {
+      this.#emitError(`Subscribing to parameter updates failed: ${String(err)}`);
+    }
+  }
+
+  async #parameterCall(send: (id: string, client: FoxgloveClient) => void, what: string, timeoutMs: number): Promise<Parameter[]> {
+    const client = this.#client;
+    if (!client || this.#state !== "connected") throw new Error(`${what}: not connected`);
+    if (!this.supportsParameters) throw new Error(`${what}: this bridge does not support parameters`);
+    const id = `iviz-${this.#nextParamId++}`;
+    return await new Promise<Parameter[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#paramCalls.delete(id);
+        reject(new Error(`${what}: the bridge did not answer in ${Math.round(timeoutMs / 1000)} s`));
+      }, timeoutMs);
+      this.#paramCalls.set(id, { resolve, reject, timer });
+      try {
+        send(id, client);
+      } catch (err) {
+        clearTimeout(timer);
+        this.#paramCalls.delete(id);
+        reject(new Error(`${what} failed: ${String(err)}`));
+      }
+    });
+  }
+
   /**
    * The parsed request and response definitions of a service, for building a
    * form. Undefined when the service or its request schema is unknown.
