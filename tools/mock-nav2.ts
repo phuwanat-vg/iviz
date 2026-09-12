@@ -91,7 +91,7 @@ function codec(schema: string): { reader: MessageReaderT; writer: MessageWriterT
   return c;
 }
 
-export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<number>): Nav2Sim {
+export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<number>, mapProvider?: () => Msg): Nav2Sim {
   const t0 = Date.now();
   const robot: Pose = { x: 3.5, y: 0, yaw: Math.PI / 2 };
   let autopilot = true;
@@ -236,6 +236,21 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
     request: { encoding: "cdr", schemaName: "nav2_msgs/srv/SaveMap_Request", schemaEncoding: "ros2msg", schema: saveMap.request },
     response: { encoding: "cdr", schemaName: "nav2_msgs/srv/SaveMap_Response", schemaEncoding: "ros2msg", schema: saveMap.response },
   });
+  // map_server's own service, which answers even when nobody publishes /map.
+  if (mapProvider) {
+    const getMap = fallbackServiceSchemas("nav_msgs/srv/GetMap")!;
+    const getMapId = server.addService({
+      name: "/map_server/map",
+      type: "nav_msgs/srv/GetMap",
+      request: { encoding: "cdr", schemaName: "nav_msgs/srv/GetMap_Request", schemaEncoding: "ros2msg", schema: getMap.request },
+      response: { encoding: "cdr", schemaName: "nav_msgs/srv/GetMap_Response", schemaEncoding: "ros2msg", schema: getMap.response },
+    });
+    handlers.set(getMapId, (req, conn) => {
+      console.log("[mock] map_server/map: returning the current map");
+      reply(req, getMap.response, { map: mapProvider() }, conn);
+    });
+  }
+
   handlers.set(saverId, (req, conn) => {
     const m = codec(saveMap.request).reader.readMessage(req.data) as Msg;
     console.log(`[mock] map_saver: would save ${m.map_topic} as ${m.map_url} (${m.image_format}, ${m.map_mode}, free ${m.free_thresh}, occupied ${m.occupied_thresh})`);

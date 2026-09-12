@@ -160,6 +160,13 @@ const SERVICES: Record<string, ServiceSchemas> = {
     response: "bool result",
   },
   "slam_toolbox/srv/SaveMap": { request: build("std_msgs/String name"), response: "int8 result" },
+  "nav_msgs/srv/GetMap": {
+    request: "uint8 structure_needs_at_least_one_member",
+    response: build("nav_msgs/OccupancyGrid map", {
+      "nav_msgs/OccupancyGrid": "std_msgs/Header header\nnav_msgs/MapMetaData info\nint8[] data",
+      "nav_msgs/MapMetaData": "builtin_interfaces/Time map_load_time\nfloat32 resolution\nuint32 width\nuint32 height\ngeometry_msgs/Pose origin",
+    }),
+  },
 };
 
 /**

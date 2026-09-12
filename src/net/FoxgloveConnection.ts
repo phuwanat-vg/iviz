@@ -71,6 +71,9 @@ export class FoxgloveConnection {
   /** Topics whose last decoded message is kept, e.g. the map for saving. */
   #retained = new Set<string>();
   #latest = new Map<string, unknown>();
+  /** Publisher count per topic, from the bridge's connection graph. */
+  #publishers = new Map<string, number>();
+  #graphSubscribed = false;
   #pendingCalls = new Map<number, PendingCall>();
   #nextCallId = 1;
 
@@ -208,8 +211,30 @@ export class FoxgloveConnection {
     client.on("serverInfo", (info) => {
       if (this.#ws !== ws) return;
       this.#serverInfo = info;
+      // The graph tells which topics something actually publishes right now.
+      if (!this.#graphSubscribed && info.capabilities.includes("connectionGraph")) {
+        this.#graphSubscribed = true;
+        try {
+          client.subscribeConnectionGraph();
+        } catch (err) {
+          this.#emitError(`Connection graph unavailable: ${String(err)}`);
+        }
+      }
       this.#emitChannels();
       this.#emitServices();
+    });
+    client.on("connectionGraphUpdate", (update) => {
+      if (this.#ws !== ws) return;
+      // Only redraw when the graph really changed; it arrives periodically.
+      let changed = false;
+      for (const t of update.publishedTopics) {
+        const count = t.publisherIds.length;
+        if (this.#publishers.get(t.name) === count) continue;
+        this.#publishers.set(t.name, count);
+        changed = true;
+      }
+      for (const name of update.removedTopics) changed = this.#publishers.delete(name) || changed;
+      if (changed) this.#emitChannels();
     });
     client.on("status", (status) => {
       if (status.level >= 2) this.#emitError(`Server: ${status.message}`);
@@ -326,6 +351,8 @@ export class FoxgloveConnection {
     this.#channelsByTopic.clear();
     this.#subIdToTopic.clear();
     this.#latest.clear();
+    this.#publishers.clear();
+    this.#graphSubscribed = false;
     for (const sub of this.#subs.values()) {
       sub.subscriptionId = undefined;
       sub.channelId = undefined;
@@ -385,6 +412,20 @@ export class FoxgloveConnection {
     } catch (err) {
       this.#emitError(`Subscribe failed on ${topic}: ${String(err)}`);
     }
+  }
+
+  /** True once the bridge has sent its connection graph. */
+  get graphAvailable(): boolean {
+    return this.#publishers.size > 0;
+  }
+
+  /**
+   * How many nodes publish `topic` right now, or undefined when the bridge
+   * does not report a connection graph.
+   */
+  publisherCount(topic: string): number | undefined {
+    if (!this.graphAvailable) return undefined;
+    return this.#publishers.get(topic) ?? 0;
   }
 
   /**

@@ -29,6 +29,8 @@ for new versions themselves, so this is a one-time download.
   (FollowPath), **pause / resume / cancel**, and **save the map** on the robot or on this PC
   ([below](#navigation))
 - Per-topic Hz and total bandwidth readout; settings persist between runs
+- The topic list shows only topics that something publishes, from the bridge's
+  connection graph; **View → Show inactive topics** lists the rest
 - Auto-reconnect
 - **Route mode**: draw the lanes the robot may drive and say what happens at
   each stop, over the same connection ([below](#route-mode))
@@ -220,6 +222,7 @@ services behind actions (`/_action/...`) are left out of the sidebar lists.
 | Pause / Resume | status bar | cancels the goal and keeps the task; Resume sends what is left |
 | Cancel | status bar | cancels every goal on the four action servers, whoever sent it |
 | Save on robot | Map | `nav2_msgs/srv/SaveMap` (map_saver) or `slam_toolbox/srv/SaveMap` |
+| Fetch the map | automatic | `nav_msgs/srv/GetMap`, when the latched `/map` topic stays silent |
 | Save to this PC | Map | writes `<name>.yaml` and `<name>.pgm` from `/map`, like map_saver |
 
 Waypoints and the path are kept between runs. While a tool is active,

@@ -39,7 +39,7 @@ const port = Number(process.argv[2] ?? 8765);
 
 const server = new FoxgloveServer({
   name: "iviz-mock-bridge",
-  capabilities: ["clientPublish", "services"],
+  capabilities: ["clientPublish", "services", "connectionGraph"],
   supportedEncodings: ["cdr"],
 });
 
@@ -75,8 +75,11 @@ const ch = {
 
 const subscribed = new Set<number>();
 
+// Advertised but never published, to exercise the inactive-topic filter.
+server.addChannel({ topic: "/mock_inactive", encoding: "cdr", schemaName: "std_msgs/msg/String", schema: "string data", schemaEncoding: "ros2msg" });
+
 // Nav2 action servers, a map saver and a robot that drives to its goals.
-const nav2 = createNav2Sim(server, subscribed);
+const nav2 = createNav2Sim(server, subscribed, () => mapMessage());
 server.on("subscribe", (id) => {
   subscribed.add(id);
   console.log(`[mock] subscribe channel ${id}`);
@@ -254,11 +257,45 @@ const wss = new WebSocketServer({
   handleProtocols: (protocols) => server.handleProtocols(protocols),
 });
 wss.on("listening", () => console.log(`[mock] foxglove ws server on ws://localhost:${port}`));
+const sockets = new Set<import("ws").WebSocket>();
 wss.on("connection", (conn, req) => {
   const name = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
   console.log(`[mock] client connected ${name}`);
+  sockets.add(conn);
+  conn.on("close", () => sockets.delete(conn));
   server.handleConnection(conn as unknown as IWebSocket, name);
 });
+
+/**
+ * The connection graph a real bridge sends: the topics something publishes
+ * right now. /mock_inactive is advertised but never published, so iViz can be
+ * checked to hide topics that have no publisher.
+ */
+const PUBLISHED_TOPICS = [
+  "/tf",
+  "/tf_static",
+  "/Odometry",
+  "/scan",
+  "/cloud_registered",
+  "/livox/lidar",
+  "/map",
+  "/local_costmap/costmap",
+  "/plan",
+  "/local_costmap/published_footprint",
+  "/amcl_pose",
+];
+setInterval(() => {
+  if (sockets.size === 0) return;
+  const update = JSON.stringify({
+    op: "connectionGraphUpdate",
+    publishedTopics: PUBLISHED_TOPICS.map((name) => ({ name, publisherIds: ["mock"] })),
+    subscribedTopics: [],
+    advertisedServices: [],
+    removedTopics: [],
+    removedServices: [],
+  });
+  for (const socket of sockets) socket.send(update);
+}, 1000);
 
 // ---------------------------------------------------------------------------
 // World
@@ -523,8 +560,8 @@ for (let j = 0; j < MAP_H; j++) {
     mapData[j * MAP_W + i] = v;
   }
 }
-setInterval(() => {
-  send(ch.map, "nav_msgs/msg/OccupancyGrid", {
+function mapMessage(): Record<string, unknown> {
+  return {
     header: { stamp: nowStamp(), frame_id: "map" },
     info: {
       map_load_time: nowStamp(),
@@ -534,7 +571,17 @@ setInterval(() => {
       origin: { position: { x: MAP_ORIGIN, y: MAP_ORIGIN, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
     },
     data: mapData,
-  });
+  };
+}
+
+// `--map-once` imitates a latched map_server: the map goes out once, so a
+// client that connects later never receives it and has to call GetMap.
+const MAP_ONCE = process.argv.includes("--map-once");
+let mapSent = false;
+setInterval(() => {
+  if (MAP_ONCE && mapSent) return;
+  mapSent = true;
+  send(ch.map, "nav_msgs/msg/OccupancyGrid", mapMessage());
 }, 1000);
 
 // /local_costmap/costmap 5 Hz (odom frame, rolling window around robot)

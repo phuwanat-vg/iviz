@@ -18,6 +18,7 @@ import { NavOverlayLayer } from "../viz/layers/NavOverlayLayer";
 import { KIND_LABEL, NavController, densifyPath, pathLength } from "../nav/NavController";
 import type { NavPhase, Pose2D, TaskKind } from "../nav/NavController";
 import { defaultMapName, encodeMap, saveMapFiles } from "../nav/mapExport";
+import { fetchMap, findMapService } from "../nav/mapSource";
 import { h, row } from "./dom";
 import { icon, setButtonContent } from "./icons";
 import type { IconName } from "./icons";
@@ -751,6 +752,8 @@ export class NavPanel {
     const cached = conn.latest<OccupancyGrid>(topic);
     if (cached) return Promise.resolve(cached);
     if (conn.state !== "connected") return Promise.reject(new Error("Not connected"));
+    // The GetMap service always answers; the topic may be latched and silent.
+    if (findMapService(conn, topic)) return fetchMap(conn, topic);
     if (!conn.channelForTopic(topic)) return Promise.reject(new Error(`The robot does not publish ${topic}`));
     return new Promise((resolve, reject) => {
       let unsubscribe = (): void => undefined;

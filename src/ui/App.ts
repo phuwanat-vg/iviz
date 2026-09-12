@@ -19,6 +19,7 @@ import { RouteStore } from "../mission/RouteStore";
 import { RouteLayer } from "../viz/layers/RouteLayer";
 import { RoutePanel } from "./RoutePanel";
 import { NavPanel } from "./NavPanel";
+import { fetchMap, findMapService } from "../nav/mapSource";
 import type { AppSettings, PersistedLayer } from "../state/settings";
 import type { Channel, Service } from "@foxglove/ws-protocol";
 
@@ -243,9 +244,18 @@ export class App {
       this.#save();
     });
 
+    const inactiveChk = h("input", { type: "checkbox", title: "Also list topics that nothing publishes right now" });
+    inactiveChk.checked = this.settings.showInactiveTopics;
+    inactiveChk.addEventListener("change", () => {
+      this.settings.showInactiveTopics = inactiveChk.checked;
+      this.#save();
+      this.#renderTopics(this.conn.channels);
+    });
+
     const viewSection = section("View", [
       h("div", { class: "row" }, h("label", { text: "Fixed frame" }), this.#fixedSel),
       h("div", { class: "row" }, h("label", { text: "Show grid" }), gridChk),
+      h("div", { class: "row" }, h("label", { text: "Show inactive topics" }), inactiveChk),
     ], false, "eye");
 
     this.#topicsEl = h("div", {}, h("div", { class: "empty", text: "Connect to see topics" }));
@@ -313,10 +323,28 @@ export class App {
     else setButtonContent(this.#connectBtn, "unplug", "Disconnect");
     this.#connectBtn.classList.toggle("primary", s === "disconnected");
     if (s === "disconnected") {
+      // Nothing on screen belongs to a robot that is gone: drop the topic
+      // layers (the settings remember them), the transforms and the lists.
       this.tf.clear();
-      this.#topicsEl.replaceChildren(h("div", { class: "empty", text: this.settings.autoConnect ? "Reconnecting…" : "Connect to see topics" }));
+      this.#tfVersionSeen = -1;
+      this.#clearLayers();
+      this.#hzEls.clear();
+      this.#mapFetchTried.clear();
+      this.#refreshFrameSelects();
+      const waiting = this.settings.autoConnect ? "Reconnecting…" : "Connect to see topics";
+      this.#topicsEl.replaceChildren(h("div", { class: "empty", text: waiting }));
       this.#servicesEl.replaceChildren(h("div", { class: "empty", text: this.settings.autoConnect ? "Reconnecting…" : "Connect to see services" }));
     }
+  }
+
+  /** Remove every topic layer without forgetting it in the settings. */
+  #clearLayers(): void {
+    for (const active of this.#layers.values()) {
+      active.unsubscribe();
+      this.viewer.removeLayer(active.layer);
+    }
+    this.#layers.clear();
+    this.#renderLayers();
   }
 
   #onChannels(channels: Channel[]): void {
@@ -327,6 +355,7 @@ export class App {
       if (ch && isSupportedSchema(ch.schemaName)) this.#addLayer(ch, p.settings, p.visible);
     }
     this.#renderTopics(channels);
+    for (const active of this.#layers.values()) this.#fetchMapIfEmpty(active.layer);
     if (this.#routePanel.active) this.#ensureMapLayer();
     const label = this.#statusEl.querySelector(".label");
     if (label && this.conn.state === "connected") label.textContent = this.#connectedLabel();
@@ -346,9 +375,17 @@ export class App {
       return;
     }
     const rows: HTMLElement[] = [];
+    let inactive = 0;
     for (const ch of channels) {
       // Action internals (include_hidden:=true) are used by Navigation, not drawn.
       if (ch.topic.includes("/_action/")) continue;
+      // The bridge lists every topic in the graph, including ones whose
+      // publisher is gone. Those cannot deliver anything, so hide them.
+      const publishers = this.conn.publisherCount(ch.topic);
+      if (publishers === 0 && !this.settings.showInactiveTopics) {
+        inactive++;
+        continue;
+      }
       const supported = isSupportedSchema(ch.schemaName);
       const isTf = TF_TOPICS.has(ch.topic);
       const chk = h("input", { type: "checkbox" });
@@ -369,7 +406,37 @@ export class App {
       );
       rows.push(row);
     }
+    if (rows.length === 0) {
+      rows.push(h("div", { class: "empty", text: inactive > 0 ? "No topic has a publisher right now" : "No topics advertised" }));
+    }
+    if (inactive > 0) {
+      rows.push(h("div", { class: "empty", text: `${inactive} topic${inactive === 1 ? "" : "s"} without a publisher hidden` }));
+    }
     this.#topicsEl.replaceChildren(...rows);
+  }
+
+  #mapFetchTried = new Set<string>();
+
+  /**
+   * A latched `/map` only reaches subscribers that were there when it was
+   * published. When a grid layer stays empty, ask the robot's GetMap service.
+   */
+  #fetchMapIfEmpty(layer: Layer): void {
+    if (normalizeSchemaName(layer.schemaName) !== "nav_msgs/OccupancyGrid") return;
+    if (layer.messageCount > 0 || this.#mapFetchTried.has(layer.topic)) return;
+    if (!findMapService(this.conn, layer.topic)) return;
+    this.#mapFetchTried.add(layer.topic);
+    window.setTimeout(() => {
+      const active = this.#layers.get(layer.topic);
+      if (!active || active.layer !== layer || layer.messageCount > 0 || this.conn.state !== "connected") return;
+      fetchMap(this.conn, layer.topic)
+        .then((grid) => {
+          if (layer.messageCount > 0) return;
+          layer.onMessage(grid, performance.now());
+          this.#toast(`${layer.topic} was not being published, so iViz asked the robot's map service for it`, "info");
+        })
+        .catch((err) => this.#toast(`Could not fetch ${layer.topic}: ${err instanceof Error ? err.message : String(err)}`));
+    }, 2500);
   }
 
   /** Read-only list of the services the bridge offers; calling is done in code. */
@@ -403,6 +470,7 @@ export class App {
     this.#layers.set(ch.topic, { layer, unsubscribe });
     this.#upsertPersisted(layer);
     this.#renderLayers();
+    this.#fetchMapIfEmpty(layer);
   }
 
   #removeLayer(topic: string): void {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.3 — 2026-09-12
+
+- The map arrives on its own. `/map` is latched, so a client that connects
+  after it was published never receives it, which is why it only showed up
+  after RViz2 had run. When a grid layer stays empty, iViz now asks the
+  robot's `nav_msgs/srv/GetMap` service (map_server or slam_toolbox) instead.
+  Save to this PC uses the same service
+- The topic list only shows topics that something publishes right now, from
+  the bridge's connection graph. **View → Show inactive topics** brings the
+  rest back
+- Disconnecting clears the topics, the services, the layers and the frames,
+  so nothing from the old robot is left on screen. Layer choices come back
+  from the settings on reconnect
+
 ## 0.2.2 — 2026-09-12
 
 - Fix: Follow path failed with "FollowPath called with goal_checker name

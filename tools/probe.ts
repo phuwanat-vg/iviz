@@ -21,6 +21,18 @@ const client = new FoxgloveClient({ ws: ws as unknown as ConstructorParameters<t
 const counts = new Map<number, { topic: string; n: number; bytes: number }>();
 
 client.on("open", () => console.log(`[probe] connected ${url}`));
+// PROBE_GRAPH=1 prints how many nodes publish each topic.
+if (process.env.PROBE_GRAPH) {
+  client.on("serverInfo", (info) => {
+    if (info.capabilities.includes("connectionGraph")) client.subscribeConnectionGraph();
+    else console.log("[probe] this bridge has no connectionGraph capability");
+  });
+  client.on("connectionGraphUpdate", (update) => {
+    const active = update.publishedTopics.filter((t) => t.publisherIds.length > 0);
+    console.log(`[probe] graph: ${active.length} of ${update.publishedTopics.length} topics have a publisher`);
+    for (const t of update.publishedTopics) console.log(`  ${t.publisherIds.length} ${t.name}`);
+  });
+}
 client.on("error", (e) => console.log(`[probe] error: ${e.message}`));
 client.on("close", (e) => {
   console.log(`[probe] closed code=${(e as { code?: number }).code ?? "?"}`);

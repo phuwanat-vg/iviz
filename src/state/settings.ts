@@ -26,6 +26,8 @@ export interface AppSettings {
   routeMission: string;
   /** Navigation panel shown on the right. */
   navOpen: boolean;
+  /** List topics that nothing publishes right now. */
+  showInactiveTopics: boolean;
   nav: NavSettings;
 }
 
@@ -89,6 +91,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   routeOpen: false,
   routeMission: "",
   navOpen: true,
+  showInactiveTopics: false,
   nav: DEFAULT_NAV_SETTINGS,
 };
 
