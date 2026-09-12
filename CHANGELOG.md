@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.1 — 2026-09-13
+
+- Setting a parameter no longer fails with *internal server error: parameter
+  handler failed to send a response*. A whole number typed into a parameter
+  the node declared as a double was offered as an integer, which the node
+  refuses; iViz now sends each value with the type the robot gave it, and the
+  field's tooltip says which numbers are doubles
+- A set the bridge will not read back is reported as unconfirmed (amber)
+  instead of as applied, and a set the node refuses puts the value the node
+  really holds back in the field and says what usually causes it
+- The mock bridge types its doubles and refuses an untyped one, like the real
+  bridge
+
 ## 0.5.0 — 2026-09-13
 
 - **Parameters** tab: read every parameter of every node and set it on the

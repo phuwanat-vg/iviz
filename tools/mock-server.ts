@@ -105,6 +105,19 @@ server.on("error", (err) => console.error("[mock] error", err));
 // A handful of parameters, named the way a Nav2 robot names them, so the
 // Parameters tab has something to set. They live in memory only, exactly like
 // parameters on a running node.
+// Parameters a node declared as double, as most Nav2 tuning values are.
+const floats = new Set([
+  "/controller_server.controller_frequency",
+  "/controller_server.FollowPath.max_vel_x",
+  "/controller_server.FollowPath.max_vel_theta",
+  "/controller_server.FollowPath.xy_goal_tolerance",
+  "/planner_server.expected_planner_frequency",
+  "/planner_server.GridBased.tolerance",
+  "/local_costmap/local_costmap.inflation_layer.inflation_radius",
+  "/local_costmap/local_costmap.robot_radius",
+  "/global_costmap/global_costmap.robot_radius",
+]);
+
 const parameters = new Map<string, unknown>([
   ["/controller_server.controller_frequency", 20.0],
   ["/controller_server.FollowPath.max_vel_x", 0.26],
@@ -121,21 +134,35 @@ const parameters = new Map<string, unknown>([
   ["/bt_navigator.default_nav_to_pose_bt_xml", "navigate_to_pose_w_replanning_and_recovery.xml"],
 ]);
 
+// The protocol marks a float64 with a type so it is not taken for an integer,
+// which is what a real bridge sends and what a node needs back.
+function asParameter(name: string): { name: string; value: never; type?: "float64" } {
+  const value = parameters.get(name);
+  const isFloat = typeof value === "number" && floats.has(name);
+  return { name, value: value as never, ...(isFloat ? { type: "float64" as const } : {}) };
+}
+
 server.on("getParameters", (request, conn) => {
   const names = request.parameterNames.length > 0 ? request.parameterNames : [...parameters.keys()];
-  const values = names.filter((n) => parameters.has(n)).map((n) => ({ name: n, value: parameters.get(n) as never }));
+  const values = names.filter((n) => parameters.has(n)).map(asParameter);
   console.log(`[mock] getParameters ${request.parameterNames.length === 0 ? "(all)" : request.parameterNames.join(", ")} -> ${values.length}`);
   if (conn) server.publishParameterValues(values, request.id, conn);
 });
 
 server.on("setParameters", (request, conn) => {
   const applied = request.parameters.map((p) => {
+    // A node refuses a float parameter offered as an integer, which is what
+    // happens when a client forgets the float64 type.
+    if (floats.has(p.name) && p.type !== "float64") {
+      console.log(`[mock] setParameter ${p.name} refused: float64 expected, got ${p.type ?? "integer"}`);
+      return asParameter(p.name);
+    }
     // Nodes clamp what they will not take; max_vel_x stands in for that here.
     let value = p.value as unknown;
     if (p.name.endsWith("max_vel_x") && typeof value === "number") value = Math.min(value, 1.0);
     parameters.set(p.name, value);
     console.log(`[mock] setParameter ${p.name} = ${JSON.stringify(value)}`);
-    return { name: p.name, value: value as never };
+    return asParameter(p.name);
   });
   if (conn) server.publishParameterValues(applied, request.id, conn);
   server.updateParameterValues(applied);

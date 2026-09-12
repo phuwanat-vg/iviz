@@ -1620,6 +1620,9 @@ label.inline-check {
 .param-panel input.failed {
   border-color: var(--err);
 }
+.param-panel input.unsure {
+  border-color: var(--warn);
+}
 .param-list {
   display: flex;
   flex-direction: column;

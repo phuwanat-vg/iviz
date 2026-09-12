@@ -45,6 +45,13 @@ export class ParamPanel {
   #changesList: HTMLElement;
   #cli!: HTMLElement;
   #values = new Map<string, unknown>();
+  /**
+   * The protocol tells integers from floats by this field: a float64 carries
+   * `type: "float64"`, an integer carries nothing. Sending a whole number
+   * back without it makes the bridge offer an integer, the node refuses the
+   * type change, and its parameter handler fails.
+   */
+  #types = new Map<string, Parameter["type"]>();
   #changes = new Map<string, Change>();
   #openNodes = new Set<string>();
   #loading = false;
@@ -130,7 +137,7 @@ export class ParamPanel {
   }
 
   #onUpdate(parameters: Parameter[]): void {
-    for (const p of parameters) this.#values.set(p.name, p.value);
+    for (const p of parameters) this.#remember(p);
     this.#listKey = "";
     this.#render();
   }
@@ -143,7 +150,8 @@ export class ParamPanel {
     try {
       const parameters = await conn.getParameters();
       this.#values.clear();
-      for (const p of parameters) this.#values.set(p.name, p.value);
+      this.#types.clear();
+      for (const p of parameters) this.#remember(p);
       conn.subscribeParameterUpdates();
       this.#listKey = "";
       this.#host.toast(`Read ${parameters.length} parameters`, "info");
@@ -155,13 +163,39 @@ export class ParamPanel {
     }
   }
 
+  /** Keep a value with the type the bridge gave it. */
+  #remember(parameter: Parameter): void {
+    this.#values.set(parameter.name, parameter.value);
+    if (parameter.type === undefined) this.#types.delete(parameter.name);
+    else this.#types.set(parameter.name, parameter.type);
+  }
+
+  /** A parameter the way the bridge wants it back, type included. */
+  #toParameter(name: string, value: unknown): Parameter {
+    const known = this.#types.get(name);
+    const type = known ?? (typeof value === "number" && !Number.isInteger(value) ? "float64" : undefined);
+    return { name, value: value as Parameter["value"], ...(type ? { type } : {}) };
+  }
+
   async #apply(name: string, value: unknown, input: HTMLElement): Promise<void> {
     const before = this.#values.get(name);
-    input.classList.remove("failed", "changed");
+    input.classList.remove("failed", "changed", "unsure");
     try {
-      const result = await this.#host.conn.setParameters([{ name, value } as Parameter]);
-      const applied = result.find((p) => p.name === name)?.value ?? value;
-      this.#values.set(name, applied);
+      const result = await this.#host.conn.setParameters([this.#toParameter(name, value)]);
+      const echoed = result.find((p) => p.name === name);
+      const applied = echoed?.value ?? value;
+      if (echoed) this.#remember(echoed);
+      else this.#values.set(name, applied);
+      // Some bridges answer a named read with nothing at all (one node's
+      // parameter service timing out is enough). Say so instead of claiming
+      // the value went in.
+      if (!echoed) {
+        input.classList.add("unsure");
+        this.#host.toast(`${name}: sent ${format(value)}, but the bridge would not read it back to confirm`);
+        this.#recordChange(name, before, applied);
+        this.#renderChanges();
+        return;
+      }
       if (JSON.stringify(applied) !== JSON.stringify(value)) {
         input.classList.add("failed");
         this.#host.toast(`${name} kept ${format(applied)}; the node did not take ${format(value)}`);
@@ -172,7 +206,17 @@ export class ParamPanel {
       this.#recordChange(name, before, applied);
     } catch (err) {
       input.classList.add("failed");
-      this.#host.toast(message(err));
+      this.#host.toast(`${name}: ${explain(err)}`);
+      // Show what the node really holds now.
+      try {
+        const [current] = await this.#host.conn.getParameters([name], 8000);
+        if (current) {
+          this.#remember(current);
+          if (current.value !== undefined && input instanceof HTMLInputElement) input.value = format(current.value);
+        }
+      } catch {
+        /* leave the field as the user typed it */
+      }
     }
     this.#renderChanges();
   }
@@ -188,7 +232,7 @@ export class ParamPanel {
     const change = this.#changes.get(name);
     if (!change) return;
     try {
-      await this.#host.conn.setParameters([{ name, value: change.before } as Parameter]);
+      await this.#host.conn.setParameters([this.#toParameter(name, change.before)]);
       this.#values.set(name, change.before);
       this.#changes.delete(name);
       this.#listKey = "";
@@ -203,7 +247,7 @@ export class ParamPanel {
     const changes = [...this.#changes.values()];
     if (changes.length === 0) return;
     try {
-      await this.#host.conn.setParameters(changes.map((c) => ({ name: c.name, value: c.before }) as Parameter));
+      await this.#host.conn.setParameters(changes.map((c) => this.#toParameter(c.name, c.before)));
       for (const c of changes) this.#values.set(c.name, c.before);
       this.#changes.clear();
       this.#listKey = "";
@@ -314,10 +358,12 @@ export class ParamPanel {
     }
 
     const isNumber = typeof value === "number";
+    const kind = this.#types.get(name);
     const input = h("input", {
       type: isNumber ? "number" : "text",
       value: isNumber || typeof value === "string" ? String(value) : JSON.stringify(value ?? null),
-      title: name,
+      // Say which numbers are doubles: a node refuses a double sent as an integer.
+      title: kind ? `${name} (${kind})` : name,
     });
     if (isNumber) input.step = "any";
     const commit = (): void => {
@@ -369,4 +415,14 @@ function format(value: unknown): string {
 
 function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Bridge errors are terse; say what usually causes them. */
+function explain(err: unknown): string {
+  const text = message(err);
+  if (/internal server error|failed to send a response/i.test(text)) {
+    return `${text}. The node refused it, usually because the value has the wrong type for that parameter or the parameter is read-only.`;
+  }
+  if (/did not answer/i.test(text)) return `${text}. The node may be busy or gone.`;
+  return text;
 }

@@ -309,9 +309,15 @@ node restart brings its old value back.
 
 - **Load parameters** reads them all; the search box filters by node or name,
   and each node is a group you open.
-- Editing a value sends it at once. The box turns green when the node took it
-  and red when it did not, and iViz says what the node kept instead, since a
-  node may clamp or refuse a value.
+- Editing a value sends it at once. The box turns green when the node took it,
+  red when it did not (iViz says what the node kept instead, since a node may
+  clamp or refuse a value), and amber when the bridge would not read the value
+  back to confirm it.
+- Each value is sent with the type the robot reported, so a whole number typed
+  into a parameter the node declared as a double still goes in as a double.
+  Hold the pointer over a field to see the type. Without this a node refuses
+  the value and the bridge answers *internal server error: parameter handler
+  failed to send a response*.
 - **Changed parameters (N)** is the summary of everything touched in this
   session, with what each one was before, a button to put one back, one to put
   them all back, and the same list as `ros2 param set` lines to keep.
