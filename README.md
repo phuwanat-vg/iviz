@@ -481,3 +481,10 @@ tools/mock-server.ts          fake foxglove_bridge for development
 tools/mock-nav2.ts            simulated Nav2 action servers and map saver for the mock
 src-tauri/                    Tauri desktop shell
 ```
+
+## Copyright
+
+© 2026 phuwanat@IRiSH Lab SUT. All rights reserved.
+
+The same notice is shown in the app's **About** box and stamped on the
+installer and the executable.

@@ -1,8 +1,9 @@
 {
   "name": "iviz",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "iViz - lightweight ROS2 visualization for Windows over Foxglove WebSocket bridge",
+  "author": "phuwanat@IRiSH Lab SUT",
   "type": "module",
   "scripts": {
     "dev": "vite",

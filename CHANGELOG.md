@@ -1,5 +1,12 @@
 # Changelog
 
+© 2026 phuwanat@IRiSH Lab SUT
+
+## 0.5.2 — 2026-09-13
+
+- Copyright: © 2026 phuwanat@IRiSH Lab SUT, shown in the **About** box and
+  stamped on the installer and the executable's file properties
+
 ## 0.5.1 — 2026-09-13
 
 - Setting a parameter no longer fails with *internal server error: parameter

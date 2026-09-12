@@ -1692,3 +1692,9 @@ label.inline-check {
 .param-change .now {
   color: var(--ok);
 }
+
+.sidebar .copyright {
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}

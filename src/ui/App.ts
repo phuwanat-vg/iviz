@@ -9,6 +9,7 @@ import type { PoseToolResult } from "../viz/Viewer";
 import { TfLayer, createLayer, isSupportedSchema, shortTypeName } from "../viz/layers";
 import type { Layer, SettingsValues } from "../viz/layers";
 import type { SettingDef } from "../viz/layers/Layer";
+import { COPYRIGHT } from "../about";
 import { loadSettings, saveSettings } from "../state/settings";
 import { checkForUpdate, getAppVersion, installUpdateAndRestart, isDesktop } from "../updater";
 import type { UpdateInfo } from "../updater";
@@ -318,6 +319,7 @@ export class App {
         h("div", { class: "row" }, h("label", { text: "iViz version" }), this.#versionEl),
         h("div", { class: "row" }, this.#updateBtn),
         this.#updateStatusEl,
+        h("div", { class: "copyright", text: COPYRIGHT }),
       ],
       true,
       "info",
