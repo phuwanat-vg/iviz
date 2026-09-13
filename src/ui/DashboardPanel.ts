@@ -1,6 +1,6 @@
 /**
- * The Dashboard tab: answer what the robot asks, and press the buttons pinned
- * from the Services tab.
+ * The Dashboard tab: start and follow missions, answer what the robot asks,
+ * and press the buttons pinned from the Services tab.
  *
  * A bridge client cannot serve ROS services, so the robot cannot call iViz
  * directly. mission_runner does the waiting on the robot instead: its
@@ -17,6 +17,7 @@ import { h, row } from "./dom";
 import { icon } from "./icons";
 import { pretty } from "./ServicePanel";
 import type { AskChannel, AskRequest } from "../nav/AskChannel";
+import { MissionsSection } from "./MissionsSection";
 
 const ANSWER_SERVICE = "/mission/answer";
 
@@ -56,6 +57,7 @@ export class DashboardPanel {
   #simNote: HTMLElement;
   #simTopic: HTMLInputElement;
   #stationsEl: HTMLElement;
+  #missions: MissionsSection;
   #disposers: (() => void)[] = [];
   #timer?: ReturnType<typeof setInterval>;
 
@@ -93,9 +95,12 @@ export class DashboardPanel {
       return input;
     };
 
+    this.#missions = new MissionsSection(host);
+
     this.element = h(
       "div",
       { class: "dash-panel" },
+      this.#missions.element,
       h("div", { class: "nav-sub" }, icon("bot"), "Asked by the robot"),
       this.#promptEl,
       this.#noteEl,
@@ -148,9 +153,11 @@ export class DashboardPanel {
   /** Redraw the pinned buttons, e.g. after one was added in the Services tab. */
   refresh(): void {
     this.#render();
+    this.#missions.refresh();
   }
 
   dispose(): void {
+    this.#missions.dispose();
     if (this.#timer) clearInterval(this.#timer);
     for (const d of this.#disposers) d();
     this.#disposers = [];

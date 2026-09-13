@@ -34,8 +34,20 @@ export interface AppSettings {
   servicePins: ServicePin[];
   /** The ask/answer topics iViz shares with any other answerer. */
   ask: AskSettings;
+  /** Which parts of the Dashboard's Missions section are open. */
+  missions: MissionsSettings;
   nav: NavSettings;
 }
+
+export interface MissionsSettings {
+  listOpen: boolean;
+  historyOpen: boolean;
+}
+
+export const DEFAULT_MISSIONS_SETTINGS: MissionsSettings = {
+  listOpen: true,
+  historyOpen: true,
+};
 
 export type DockTab = "nav" | "services" | "dashboard" | "params";
 
@@ -126,13 +138,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dockTab: "nav",
   servicePins: [],
   ask: DEFAULT_ASK_SETTINGS,
+  missions: DEFAULT_MISSIONS_SETTINGS,
   nav: DEFAULT_NAV_SETTINGS,
 };
 
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS };
+    if (!raw) return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS } };
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     const nav = { ...DEFAULT_NAV_SETTINGS, ...(parsed.nav ?? {}) };
     // 0.2.0 and 0.2.1 saved nav2_bringup's example plugin names as defaults,
@@ -148,9 +161,10 @@ export function loadSettings(): AppSettings {
     if (!Array.isArray(nav.path)) nav.path = [];
     if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
     const ask = { ...DEFAULT_ASK_SETTINGS, ...(parsed.ask ?? {}) };
-    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], ask, nav };
+    const missions = { ...DEFAULT_MISSIONS_SETTINGS, ...(parsed.missions ?? {}) };
+    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], ask, missions, nav };
   } catch {
-    return { ...DEFAULT_SETTINGS, nav: { ...DEFAULT_NAV_SETTINGS } };
+    return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS }, nav: { ...DEFAULT_NAV_SETTINGS } };
   }
 }
 

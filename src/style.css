@@ -1594,6 +1594,265 @@ label.inline-check {
   gap: 6px;
 }
 
+/* ---------- dashboard missions ------------------------------------------ */
+.missions .nav-sub.fold {
+  cursor: pointer;
+  user-select: none;
+}
+.missions .nav-sub.fold:hover {
+  color: var(--text);
+}
+.missions .nav-sub.fold .caret {
+  width: 9px;
+}
+/* The refresh button sits after the rule line. */
+.missions .nav-sub.fold button {
+  order: 2;
+  padding: 1px 3px;
+}
+.missions .nav-sub.fold::after {
+  order: 1;
+}
+.nav-chip.failed {
+  background: rgba(255, 90, 106, 0.16);
+  color: var(--err);
+}
+.nav-chip.queued,
+.nav-chip.suspended {
+  background: rgba(242, 177, 52, 0.12);
+  color: var(--warn);
+}
+.mission-run {
+  padding: 8px;
+  border: 1px solid var(--accent-2);
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.mission-run.paused {
+  border-color: var(--warn);
+}
+.mission-run .head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mission-run .head .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-run .elapsed {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.mission-run .detail {
+  padding-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.mission-run .detail .step {
+  font-family: var(--mono);
+  color: var(--text);
+}
+.mission-run .detail.warn,
+.mission-run .confirm {
+  color: var(--warn);
+}
+.mission-run .confirm {
+  padding-top: 6px;
+  font-size: 12px;
+}
+.mission-progress {
+  height: 4px;
+  margin: 6px 0 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg);
+}
+.mission-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.missions .mission-search {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.mission-list,
+.run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mission-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 5px;
+}
+.mission-row:hover,
+.mission-item.open {
+  background: var(--panel-2);
+}
+.mission-item.open {
+  border-radius: 5px;
+}
+.mission-row .info {
+  flex: 1;
+  min-width: 0;
+}
+.mission-row .name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.mission-row .name .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-row .meta {
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mission-row .meta.warn {
+  color: var(--warn);
+}
+.mission-row .name .nav-chip {
+  font-size: 10px;
+}
+.mission-row > button {
+  flex: none;
+  padding: 2px 7px;
+  font-size: 12px;
+}
+.mission-row > button svg.icon {
+  width: 12px;
+  height: 12px;
+}
+.mission-form {
+  padding: 2px 6px 6px;
+}
+.mission-form .row input[type="text"],
+.mission-form .row input[type="number"],
+.mission-form .row textarea {
+  width: 150px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.run-row {
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.run-row:hover,
+.run-row.open {
+  background: var(--panel-2);
+}
+.run-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.run-head .caret {
+  width: 9px;
+  color: var(--muted);
+}
+.run-head .nav-chip {
+  font-size: 10px;
+}
+.run-head .title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-head .when,
+.run-head .dur {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.run-error {
+  padding: 1px 0 1px 15px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.run-error.failed {
+  color: var(--err);
+}
+.run-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 4px 0 2px 15px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+.run-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.run-step .at,
+.run-step .dur {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+.run-step .at {
+  width: 62px;
+}
+.run-step .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.run-step.succeeded .dot {
+  background: var(--ok);
+}
+.run-step.failed .dot,
+.run-step.error .dot {
+  background: var(--err);
+}
+.run-step.canceled .dot,
+.run-step.marker .dot {
+  background: var(--warn);
+}
+.run-step.marker .name {
+  font-style: italic;
+  color: var(--warn);
+}
+.run-step .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-step .err {
+  flex-basis: 100%;
+  padding-left: 81px;
+  color: var(--err);
+}
+
 /* ---------- parameters tab ---------------------------------------------- */
 .param-panel .row label {
   flex: 1;

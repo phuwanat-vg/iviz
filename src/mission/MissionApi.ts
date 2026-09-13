@@ -35,6 +35,7 @@ export interface RobotState {
 export interface StepRef {
   id: string;
   name?: string;
+  type?: string;
   path?: Path;
   started_at?: string;
 }
@@ -57,6 +58,13 @@ export interface Run {
   step?: StepRef | null;
   error?: string;
   feedback?: Feedback | null;
+  policy?: string;
+  created_at?: string | null;
+}
+
+/** `GET /api/runs/{id}`: the run plus what it recorded, oldest first. */
+export interface RunDetail extends Run {
+  events?: { t: number | string; type: string; step_id?: string | null; path?: Path | null; [field: string]: unknown }[];
 }
 
 export interface Prompt {
@@ -299,7 +307,13 @@ export class MissionApi {
       }
     }
     if (res.ok === false || status >= 400) {
-      const detail = isRecord(parsed) && typeof parsed.error === "string" && parsed.error !== "" ? parsed.error : res.message || `${method} ${path} failed with ${status || "no status"}`;
+      // A refused run answers 409 {accepted: false, reason} rather than {error}.
+      const detail =
+        isRecord(parsed) && typeof parsed.error === "string" && parsed.error !== ""
+          ? parsed.error
+          : isRecord(parsed) && typeof parsed.reason === "string" && parsed.reason !== ""
+            ? parsed.reason
+            : res.message || `${method} ${path} failed with ${status || "no status"}`;
       const errors = isRecord(parsed) && Array.isArray(parsed.errors) ? (parsed.errors as ApiFinding[]) : [];
       throw new MissionApiError(detail, status, errors);
     }
@@ -348,6 +362,19 @@ export class MissionApi {
   }
   async stop(): Promise<unknown> {
     return await this.post<unknown>("/api/stop", {});
+  }
+  /** Cancel one run: the active one, a queued one or a suspended one. */
+  async cancel(runId: string): Promise<unknown> {
+    return await this.post<unknown>(`/api/runs/${encodeURIComponent(runId)}/cancel`, {});
+  }
+  /** Run history, newest first. */
+  async runs(limit = 50, mission = ""): Promise<Run[]> {
+    const query = `limit=${limit}${mission ? `&mission=${encodeURIComponent(mission)}` : ""}`;
+    const list = await this.get<Run[]>(`/api/runs?${query}`);
+    return Array.isArray(list) ? list : [];
+  }
+  async runDetail(runId: string): Promise<RunDetail> {
+    return await this.get<RunDetail>(`/api/runs/${encodeURIComponent(runId)}`);
   }
   /** Pause the active run. Without an id the one from the last status is used. */
   async pause(runId?: string): Promise<unknown> {

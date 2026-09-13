@@ -30,8 +30,10 @@ for new versions themselves, so this is a one-time download.
   ([below](#navigation))
 - **Services** tab: call any service the robot offers, with the request form
   built from its schema, and pin a filled-in call to the Dashboard as a button
-- **Dashboard** tab: answer mission_runner's questions with a button, on the
-  panel and over the map ([below](#services-and-the-dashboard))
+- **Dashboard** tab: start, pause and stop the robot's missions and follow the
+  step it is on, see how recent runs ended, and answer mission_runner's
+  questions with a button, on the panel and over the map
+  ([below](#services-and-the-dashboard))
 - Per-topic Hz and total bandwidth readout; settings persist between runs
 - The topic list shows only topics that something publishes, from the bridge's
   connection graph; **View → Show inactive topics** lists the rest
@@ -287,7 +289,38 @@ button, so clearing a costmap or starting a routine is one click. Pins are
 saved with the settings. The hidden services behind ROS 2 actions are left out
 of the list unless you ask for them.
 
-**Dashboard** answers what the robot asks. A bridge client cannot serve ROS
+### Missions
+
+The top of the **Dashboard** runs the missions that live on the robot. It talks
+to mission_runner through `/mission/api` on the same bridge connection, so the
+robot needs only mission_runner and mission_msgs; nothing extra is installed
+for iViz.
+
+- **Current run**: the mission, its status, the step it is on (and which step
+  of the flow that is), distance and ETA while it drives, and how long it has
+  been running. **Pause** cancels navigation and re-runs the step on
+  **Resume**. **Stop** asks first; with runs queued or suspended it also offers
+  to stop all of them (the runner's STOP). The queue is listed below the card
+- **Missions on the robot**: title, name and what triggers each one
+  (`cron 0 22 * * *`, `POST /hooks/pickup`; amber when a trigger is not armed),
+  the description on hover, and **Run**. A mission with inputs asks for them
+  first. If its policy would cancel or interrupt what is running, it says so
+  and waits for **Run anyway**. A search box appears when there are many
+- **Recent runs**: the last ten, with result, error, start time and duration.
+  Click one to see its steps with their timing, nested steps indented and
+  pauses marked
+
+It follows `/mission/state` and `/mission/event` live. When they are quiet and
+the tab is on screen it polls `/api/status` every 2 s instead. A toast says
+when a run starts and how it ended. Not connected, or connected to a robot
+whose bridge does not advertise `/mission/api`, the section says which. To try
+it without a robot, run the sim runner behind the mock bridge (see
+[Route mode without a robot](#route-mode-without-a-robot)); the example
+missions install on first start.
+
+### Questions and buttons
+
+**Dashboard** also answers what the robot asks. A bridge client cannot serve ROS
 services, so nothing on the robot can call iViz directly; mission_runner does
 the waiting there instead. Its `ask_user` step publishes the question on
 `/mission/event` and blocks until an answer arrives through `/mission/answer`

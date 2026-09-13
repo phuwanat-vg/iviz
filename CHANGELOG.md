@@ -2,6 +2,34 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.7.0 — 2026-09-13
+
+- **Missions on the Dashboard.** A Missions section at the top of the
+  Dashboard lists the missions on the robot (title, name, what triggers them,
+  the description on hover) with a **Run** button each, through mission_runner's
+  `/mission/api` on the connection iViz already has. Nothing else is needed on
+  the robot
+- A mission that declares inputs opens a small form for them first. When
+  starting it would cancel or interrupt the active run (its policy is
+  `preempt`, `preempt_latest` or `interrupt_and_resume`), the form says so and
+  the button reads **Run anyway**
+- The **current run** card shows the mission, its status, the step it is on
+  and where that step sits in the flow, distance and ETA from Nav2, and how long
+  it has run, with **Pause** / **Resume** and **Stop**. Stop asks first, and
+  offers to stop the queued and suspended runs too when there are any. The
+  queue is listed underneath
+- **Recent runs** lists the last ten with their result, error, start time and
+  duration; click one for its steps, nested steps indented, pauses marked
+- Updates live from `/mission/state` and `/mission/event`; when neither has
+  said anything for a few seconds and the tab is on screen, `/api/status` is
+  polled every 2 s. A toast says when a run starts, succeeds, fails or is
+  canceled
+- Without a connection, or without mission_runner on the robot, the section
+  says which and why; the list and history can be folded away, which is saved
+  with the settings
+- A run the runner refuses (for example `reject_if_busy` while busy) now reports
+  the runner's reason instead of a bare 409
+
 ## 0.6.0 — 2026-09-13
 
 - **Request and answer topics per station.** Mission Builder and
