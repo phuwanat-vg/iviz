@@ -10,8 +10,15 @@
  * The asker publishes a request and waits for an answer with the same `id`.
  * iViz answers from its Dashboard while a system is being tried out; later a
  * node, a PLC adapter or a button box can answer instead, and the asking side
- * does not change. iViz's own station stops publish requests through here too,
- * so an external answerer can drive them.
+ * does not change.
+ *
+ * The pair need not be one for the whole robot. mission_runner can give each
+ * station its own (`/station/conveyor1/request` and `/answer`), so a screen at
+ * that station only sees its own questions. iViz listens on the pair set in
+ * the Dashboard, and also on every pair it learns about from the runner's
+ * `request` events, which name both topics. Each request remembers the answer
+ * topic that goes with the topic it came in on, so one iViz answers every
+ * station on the right topic.
  *
  * A blocking service (mission_runner's `/mission/answer`) covers the case
  * where the asker wants a call rather than a topic; that path lives in
@@ -31,6 +38,9 @@ export interface AskRequest {
   timeoutSec?: number;
   station?: string;
   source?: string;
+  /** The topic it arrived on, and the one its answer goes back on. */
+  requestTopic: string;
+  answerTopic: string;
   /** Local time it arrived, for ordering and timeouts. */
   received: number;
 }
@@ -40,16 +50,27 @@ export interface AskTopics {
   answerTopic: string;
 }
 
+/** A request/answer pair other than the Dashboard's, learned this session. */
+export interface StationTopics extends AskTopics {
+  station?: string;
+}
+
 type AnswerListener = (id: string, answer: string, by: string) => void;
 
 export class AskChannel {
   #conn: FoxgloveConnection;
   #topics: () => AskTopics;
   #pending: AskRequest[] = [];
+  /** The Dashboard's pair. */
   #unsubscribe: (() => void)[] = [];
+  #subscribedTo = "";
+  /** Pairs learned from the runner, keyed by request topic. */
+  #stations = new Map<string, StationTopics>();
+  #stationSubs = new Map<string, () => void>();
+  /** Answer topics by request id, kept after a request is gone so a late answer by hand still goes to the right place. */
+  #answerTopicById = new Map<string, string>();
   #changeListeners = new Set<() => void>();
   #answerListeners = new Set<AnswerListener>();
-  #subscribedTo = "";
   #lastRequestId = "";
 
   constructor(conn: FoxgloveConnection, topics: () => AskTopics) {
@@ -62,16 +83,19 @@ export class AskChannel {
     });
   }
 
-  /** Subscribe the two topics, or re-subscribe after they were changed. */
+  /** Subscribe the Dashboard's two topics, or re-subscribe after they were changed. */
   start(): void {
     const { requestTopic, answerTopic } = this.#topics();
     const key = `${requestTopic}|${answerTopic}`;
     if (key === this.#subscribedTo) return;
     this.stop();
     this.#subscribedTo = key;
-    if (requestTopic === "" || answerTopic === "") return;
-    this.#unsubscribe.push(this.#conn.subscribe(requestTopic, (msg) => this.#onRequest(msg)));
-    this.#unsubscribe.push(this.#conn.subscribe(answerTopic, (msg) => this.#onAnswer(msg)));
+    if (requestTopic !== "" && answerTopic !== "") {
+      this.#unsubscribe.push(this.#conn.subscribe(requestTopic, (msg) => this.#onRequest(msg, requestTopic, answerTopic)));
+      this.#unsubscribe.push(this.#conn.subscribe(answerTopic, (msg) => this.#onAnswer(msg)));
+    }
+    // A learned pair may now be the Dashboard's, or have stopped being it.
+    for (const station of [...this.#stations.values()]) this.#listenStation(station);
   }
 
   stop(): void {
@@ -89,36 +113,84 @@ export class AskChannel {
     return this.#lastRequestId;
   }
 
+  /** Station pairs learned this session, besides the Dashboard's. */
+  get stations(): StationTopics[] {
+    const { requestTopic, answerTopic } = this.#topics();
+    return [...this.#stations.values()].filter((s) => s.requestTopic !== requestTopic || s.answerTopic !== answerTopic);
+  }
+
   onChange(listener: () => void): () => void {
     this.#changeListeners.add(listener);
     return () => this.#changeListeners.delete(listener);
   }
 
-  /** Every answer seen on the topic, including answers from other clients. */
+  /** Every answer seen on a listened answer topic, including answers from other clients. */
   onAnswer(listener: AnswerListener): () => void {
     this.#answerListeners.add(listener);
     return () => this.#answerListeners.delete(listener);
   }
 
-  /** Publish a request, for iViz's own station stops. */
-  ask(request: { id: string; text: string; options: string[]; default?: string; timeoutSec?: number; station?: string }): boolean {
-    const payload: Record<string, unknown> = {
-      id: request.id,
-      text: request.text,
-      options: request.options,
-      source: "iviz",
-    };
-    if (request.default !== undefined) payload.default = request.default;
-    if (request.timeoutSec !== undefined) payload.timeout_s = request.timeoutSec;
-    if (request.station !== undefined) payload.station = request.station;
-    return this.#publish(this.#topics().requestTopic, payload);
+  /** Where the answer for `id` goes: the topic that came with its request, else the Dashboard's. */
+  answerTopicFor(id: string): string {
+    return this.#pending.find((p) => p.id === id)?.answerTopic ?? this.#answerTopicById.get(id) ?? this.#topics().answerTopic;
   }
 
-  /** Answer a request; drops it from the pending list. */
-  answer(id: string, answer: string, by = "iviz"): boolean {
-    const ok = this.#publish(this.#topics().answerTopic, { id, answer, by });
+  /**
+   * A request the runner reported on `/mission/event`, with the two topics it
+   * chose. The pair is listened on from now on, so an answer from someone
+   * else clears the card and the next request at that station arrives
+   * straight from its topic too.
+   */
+  addRequest(body: unknown, requestTopic: string, answerTopic: string): void {
+    if (requestTopic === "" || answerTopic === "") return;
+    const request = parseRequest(body, requestTopic, answerTopic);
+    this.learn({ requestTopic, answerTopic, station: request?.station });
+    if (request) this.#upsert(request);
+  }
+
+  /** Listen on a station's pair for the rest of the session. */
+  learn(station: StationTopics): void {
+    if (station.requestTopic === "" || station.answerTopic === "") return;
+    const known = this.#stations.get(station.requestTopic);
+    if (known && known.answerTopic === station.answerTopic) {
+      if (station.station && !known.station) {
+        known.station = station.station;
+        this.#emitChange();
+      }
+      return;
+    }
+    const entry = { ...station };
+    this.#stations.set(station.requestTopic, entry);
+    this.#listenStation(entry);
+    this.#emitChange();
+  }
+
+  /** A request known to be answered, e.g. from the runner's `request.answered`. */
+  markAnswered(id: string, answer: string, by: string): void {
+    this.#remove(id, answer, by);
+  }
+
+  /** Answer on the topic that goes with the request, or on `topic` when given; drops it from the pending list. */
+  answer(id: string, answer: string, by = "iviz", topic?: string): boolean {
+    const target = topic !== undefined && topic !== "" ? topic : this.answerTopicFor(id);
+    const ok = this.#publish(target, { id, answer, by });
     if (ok) this.#remove(id, answer, by);
     return ok;
+  }
+
+  #listenStation(station: StationTopics): void {
+    const { requestTopic, answerTopic } = this.#topics();
+    this.#stationSubs.get(station.requestTopic)?.();
+    this.#stationSubs.delete(station.requestTopic);
+    const subs: (() => void)[] = [];
+    // The Dashboard's own topics are listened on already.
+    if (station.requestTopic !== requestTopic) {
+      subs.push(this.#conn.subscribe(station.requestTopic, (msg) => this.#onRequest(msg, station.requestTopic, station.answerTopic)));
+    }
+    if (station.answerTopic !== answerTopic) {
+      subs.push(this.#conn.subscribe(station.answerTopic, (msg) => this.#onAnswer(msg)));
+    }
+    this.#stationSubs.set(station.requestTopic, () => subs.forEach((un) => un()));
   }
 
   #publish(topic: string, payload: Record<string, unknown>): boolean {
@@ -126,27 +198,25 @@ export class AskChannel {
     return this.#conn.publish(topic, "std_msgs/msg/String", STRING_SCHEMA, { data: JSON.stringify(payload) });
   }
 
-  #onRequest(msg: unknown): void {
-    const body = parseJsonMessage(msg);
-    if (!body) return;
-    const id = typeof body.id === "string" ? body.id : "";
-    const text = typeof body.text === "string" ? body.text : "";
-    if (id === "" || text === "") return;
-    const options = Array.isArray(body.options) ? body.options.filter((o): o is string => typeof o === "string") : [];
-    const request: AskRequest = {
-      id,
-      text,
-      options: options.length > 0 ? options : ["OK"],
-      default: typeof body.default === "string" ? body.default : undefined,
-      timeoutSec: typeof body.timeout_s === "number" ? body.timeout_s : undefined,
-      station: typeof body.station === "string" ? body.station : undefined,
-      source: typeof body.source === "string" ? body.source : undefined,
-      received: Date.now(),
-    };
-    this.#lastRequestId = id;
-    const at = this.#pending.findIndex((p) => p.id === id);
-    if (at >= 0) this.#pending[at] = request;
-    else this.#pending = [...this.#pending, request].slice(-10);
+  #onRequest(msg: unknown, requestTopic: string, answerTopic: string): void {
+    const request = parseRequest(parseJsonMessage(msg), requestTopic, answerTopic);
+    if (request) this.#upsert(request);
+  }
+
+  #upsert(request: AskRequest): void {
+    this.#lastRequestId = request.id;
+    this.#answerTopicById.set(request.id, request.answerTopic);
+    if (this.#answerTopicById.size > 50) {
+      const oldest = this.#answerTopicById.keys().next().value;
+      if (oldest !== undefined) this.#answerTopicById.delete(oldest);
+    }
+    const at = this.#pending.findIndex((p) => p.id === request.id);
+    if (at >= 0) {
+      // Seen twice, on its topic and in the runner's event: keep when it first arrived.
+      this.#pending[at] = { ...request, received: this.#pending[at]!.received };
+      return;
+    }
+    this.#pending = [...this.#pending, request].slice(-10);
     this.#emitChange();
   }
 
@@ -169,6 +239,27 @@ export class AskChannel {
   #emitChange(): void {
     for (const l of this.#changeListeners) l();
   }
+}
+
+function parseRequest(body: unknown, requestTopic: string, answerTopic: string): AskRequest | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const b = body as Record<string, unknown>;
+  const id = typeof b.id === "string" ? b.id : "";
+  const text = typeof b.text === "string" ? b.text : "";
+  if (id === "" || text === "") return undefined;
+  const options = Array.isArray(b.options) ? b.options.filter((o): o is string => typeof o === "string") : [];
+  return {
+    id,
+    text,
+    options: options.length > 0 ? options : ["OK"],
+    default: typeof b.default === "string" ? b.default : undefined,
+    timeoutSec: typeof b.timeout_s === "number" ? b.timeout_s : undefined,
+    station: typeof b.station === "string" ? b.station : undefined,
+    source: typeof b.source === "string" ? b.source : undefined,
+    requestTopic,
+    answerTopic,
+    received: Date.now(),
+  };
 }
 
 function parseJsonMessage(msg: unknown): Record<string, unknown> | undefined {

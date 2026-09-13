@@ -2,6 +2,25 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.6.0 — 2026-09-13
+
+- **Request and answer topics per station.** Mission Builder and
+  mission_runner can give a point its own pair (`/station/conveyor1/request`
+  and `/answer`). iViz reads the runner's `request` events, which name the
+  pair a question used, shows the question and answers it on that station's
+  answer topic, so one iViz answers every station. The pair is listened on for
+  the rest of the session, and the runner's `request.answered` clears the card
+  and lists the answer
+- Each card says which topic it answers on when that is not the Dashboard's.
+  The Topics block lists the station pairs picked up so far
+- **Answer by hand** has an **Answer topic**: left empty it uses the topic that
+  came with the request, so answering a station by hand goes to the station
+- The Dashboard's own pair (`/iviz/request`, `/iviz/answer`) works as before,
+  for nodes that do not go through mission_runner
+- The mock bridge takes `--stations`: two stations asking in turn on their own
+  topics, announced on `/mission/event`, and it logs an answer sent to the
+  wrong topic
+
 ## 0.5.2 — 2026-09-13
 
 - Copyright: © 2026 phuwanat@IRiSH Lab SUT, shown in the **About** box and

@@ -76,6 +76,18 @@ const ch = {
   askAnswer: channel("/iviz/answer", "std_msgs/msg/String"),
 };
 
+// `--stations` imitates mission_runner with a request/answer pair per station,
+// as Mission Builder sets them on a point: each request goes out on the
+// station's own topic and is announced on /mission/event with both topics.
+const STATIONS = process.argv.includes("--stations");
+const stationTopics = STATIONS
+  ? ["Conveyor1", "Conveyor2"].map((name) => {
+      const slug = name.toLowerCase();
+      const request = `/station/${slug}/request`;
+      return { name, request, answer: `/station/${slug}/answer`, channel: channel(request, "std_msgs/msg/String") };
+    })
+  : [];
+
 const subscribed = new Set<number>();
 
 // `--no-localization` imitates AMCL before it has an initial pose: there is no
@@ -178,6 +190,7 @@ server.on("message", ({ channel: c, data }) => {
     const reader = new MessageReader(parse(normalizeRos2MsgText(schema), { ros2: true }));
     const msg = reader.readMessage(data) as Record<string, unknown>;
     if (c.topic === "/goal_pose") nav2.goalPose(msg);
+    if (STATIONS) handleStationAnswer(c.topic, msg);
     if (c.topic === "/iviz/request" && AUTO_ANSWER) {
       const body = JSON.parse(String(msg.data ?? "{}")) as { id?: string; options?: string[] };
       const answer = body.options?.[0] ?? "Continue";
@@ -777,4 +790,53 @@ if (process.argv.includes("--ask")) {
       }),
     });
   }, 25_000);
+}
+
+const stationPending = new Map<string, { station: string; answer: string; text: string }>();
+if (STATIONS) {
+  let asked = 0;
+  setInterval(() => {
+    const st = stationTopics[asked % stationTopics.length]!;
+    asked += 1;
+    const id = `st-${asked}`;
+    const body = {
+      id,
+      text: `${st.name}: is the part in place?`,
+      options: ["OK", "Reject"],
+      default: "OK",
+      timeout_s: 120,
+      station: st.name,
+      source: "mission_runner",
+      mission: "pickup_job",
+      run_id: "sim-run",
+      step_id: "check",
+    };
+    stationPending.set(id, { station: st.name, answer: st.answer, text: body.text });
+    send(st.channel, "std_msgs/msg/String", { data: JSON.stringify(body) });
+    send(ch.missionEvent, "std_msgs/msg/String", {
+      data: JSON.stringify({ type: "request", run_id: "sim-run", step_id: "check", request: body, request_topic: st.request, answer_topic: st.answer }),
+    });
+    console.log(`[mock] ${st.name} asks ${id} on ${st.request}; waiting on ${st.answer}`);
+  }, 15_000);
+}
+
+/** The runner only listens on the station's answer topic; say when an answer went elsewhere. */
+function handleStationAnswer(topic: string, msg: Record<string, unknown>): void {
+  let body: { id?: string; answer?: string; by?: string };
+  try {
+    body = JSON.parse(String(msg.data ?? "")) as typeof body;
+  } catch {
+    return;
+  }
+  const pending = body.id ? stationPending.get(body.id) : undefined;
+  if (!pending || !body.id) return;
+  if (topic !== pending.answer) {
+    console.log(`[mock] WRONG TOPIC: answer for ${body.id} (${pending.station}) came on ${topic}, runner waits on ${pending.answer}`);
+    return;
+  }
+  stationPending.delete(body.id);
+  console.log(`[mock] ${pending.station} got "${body.answer}" for ${body.id} on ${topic}`);
+  send(ch.missionEvent, "std_msgs/msg/String", {
+    data: JSON.stringify({ type: "request.answered", run_id: "sim-run", step_id: "check", id: body.id, answer: body.answer, by: body.by ?? "" }),
+  });
 }

@@ -54,6 +54,8 @@ export class DashboardPanel {
   #simId: HTMLInputElement;
   #simAnswer: HTMLInputElement;
   #simNote: HTMLElement;
+  #simTopic: HTMLInputElement;
+  #stationsEl: HTMLElement;
   #disposers: (() => void)[] = [];
   #timer?: ReturnType<typeof setInterval>;
 
@@ -68,6 +70,10 @@ export class DashboardPanel {
     this.#simId = h("input", { type: "text", placeholder: "last request" });
     this.#simAnswer = h("input", { type: "text", placeholder: "Continue" });
     this.#simNote = h("div", { class: "nav-note" });
+    // Empty: the topic that came with the request, so a station's question is answered on its own topic.
+    this.#simTopic = h("input", { type: "text", placeholder: host.settings.ask.answerTopic });
+    this.#simId.addEventListener("input", () => this.#renderSimTopic());
+    this.#stationsEl = h("div", { class: "nav-note" });
     const quick = ["Continue", "Stop", "Retry", "Yes", "No"].map((label) => {
       const button = h("button", {}, label);
       button.addEventListener("click", () => this.#sendSimulated(label));
@@ -97,6 +103,7 @@ export class DashboardPanel {
       h("div", { class: "nav-sub" }, icon("send"), "Answer by hand"),
       row("Request id", this.#simId),
       row("Answer", this.#simAnswer),
+      row("Answer topic", this.#simTopic),
       h("div", { class: "nav-buttons" }, ...quick),
       h("div", { class: "nav-buttons" }, send),
       this.#simNote,
@@ -105,9 +112,10 @@ export class DashboardPanel {
       h("div", { class: "nav-sub" }, icon("topics"), "Topics"),
       row("Requests", topicField(host.settings.ask.requestTopic, "/iviz/request", (v) => (host.settings.ask.requestTopic = v))),
       row("Answers", topicField(host.settings.ask.answerTopic, "/iviz/answer", (v) => (host.settings.ask.answerTopic = v))),
+      this.#stationsEl,
       h("div", {
         class: "nav-note",
-        text: "Requests are std_msgs/String JSON: {id, text, options}. Answers go back as {id, answer}. Anything can ask or answer, so a node of yours can replace iViz later.",
+        text: "Requests are std_msgs/String JSON: {id, text, options}. Answers go back as {id, answer}. Anything can ask or answer, so a node of yours can replace iViz later. A station with its own pair is picked up from mission_runner's events and answered on its own topic.",
       }),
     );
     this.card = h("div", { class: "prompt-card" });
@@ -151,6 +159,26 @@ export class DashboardPanel {
   // ----- prompts -----------------------------------------------------------
 
   #onEvent(event: RunnerEvent): void {
+    // A ros.request step names the pair it chose, which may be a station's own.
+    if (event.type === "request") {
+      const fields = event as unknown as Record<string, unknown>;
+      const requestTopic = typeof fields.request_topic === "string" ? fields.request_topic : "";
+      const answerTopic = typeof fields.answer_topic === "string" ? fields.answer_topic : "";
+      this.#host.ask.addRequest(fields.request, requestTopic, answerTopic);
+      return;
+    }
+    if (event.type === "request.answered") {
+      const fields = event as unknown as Record<string, unknown>;
+      const id = typeof fields.id === "string" ? fields.id : "";
+      if (id === "") return;
+      const request = this.#host.ask.pending.find((r) => r.id === id);
+      const answer = String(fields.answer ?? "");
+      const by = typeof fields.by === "string" ? fields.by : "";
+      if (request) this.#record({ text: request.text, answer, by, at: Date.now() });
+      this.#host.ask.markAnswered(id, answer, by);
+      this.#renderHistory();
+      return;
+    }
     if (event.type === "prompt" && event.prompt) {
       const same = this.#prompt?.id === event.prompt.id;
       this.#remember(event.prompt);
@@ -256,6 +284,23 @@ export class DashboardPanel {
     this.#noteEl.textContent = reason ? `mission_runner's ask_user questions need it reachable. ${reason}. Requests on ${this.#host.settings.ask.requestTopic} still work.` : "";
     this.#noteEl.hidden = this.#noteEl.textContent === "";
     this.#noteEl.classList.toggle("warn", reason !== "" && this.#host.conn.state === "connected");
+    this.#renderStations();
+    this.#renderSimTopic();
+  }
+
+  #renderSimTopic(): void {
+    const id = this.#simId.value.trim() || this.#host.ask.lastRequestId;
+    this.#simTopic.placeholder = id ? this.#host.ask.answerTopicFor(id) : this.#host.settings.ask.answerTopic;
+  }
+
+  /** Station pairs learned from mission_runner, listened on besides the pair above. */
+  #renderStations(): void {
+    const stations = this.#host.ask.stations;
+    this.#stationsEl.hidden = stations.length === 0;
+    this.#stationsEl.replaceChildren(
+      h("div", { text: "Also listening, per station:" }),
+      ...stations.map((s) => h("div", { text: `${s.station ? `${s.station}: ` : ""}${s.requestTopic} → ${s.answerTopic}` })),
+    );
   }
 
   #renderHistory(): void {
@@ -297,18 +342,17 @@ export class DashboardPanel {
    * answering node".
    */
   #sendSimulated(answer: string): void {
-    const { ask, settings } = this.#host;
+    const { ask } = this.#host;
     const id = this.#simId.value.trim() || ask.lastRequestId;
     if (id === "") {
       this.#simNote.textContent = `No request has arrived yet. Type the id the robot is waiting for, or leave it empty once one shows up.`;
       this.#simNote.classList.add("warn");
       return;
     }
-    const sent = ask.answer(id, answer);
+    const topic = this.#simTopic.value.trim() || ask.answerTopicFor(id);
+    const sent = ask.answer(id, answer, "iviz", topic);
     this.#simNote.classList.toggle("warn", !sent);
-    this.#simNote.textContent = sent
-      ? `Sent "${answer}" for ${id} on ${settings.ask.answerTopic}`
-      : `Could not publish on ${settings.ask.answerTopic}. Connect first.`;
+    this.#simNote.textContent = sent ? `Sent "${answer}" for ${id} on ${topic}` : `Could not publish on ${topic}. Connect first.`;
     if (!sent) return;
     this.#simAnswer.value = answer;
     this.#record({ text: `answer for ${id}`, answer, by: "you", at: Date.now() });
@@ -320,6 +364,7 @@ export class DashboardPanel {
     const parts: HTMLElement[] = [h("div", { class: "question", text: request.text })];
     const meta: string[] = [];
     if (request.station) meta.push(request.station);
+    if (request.answerTopic !== this.#host.settings.ask.answerTopic) meta.push(`answers on ${request.answerTopic}`);
     if (request.source) meta.push(`from ${request.source}`);
     if (request.timeoutSec) meta.push(`${request.timeoutSec} s to answer`);
     if (meta.length > 0) parts.push(h("div", { class: "detail", text: meta.join(" · ") }));
@@ -328,7 +373,7 @@ export class DashboardPanel {
       button.addEventListener("click", () => {
         const sent = this.#host.ask.answer(request.id, option);
         if (!sent) {
-          this.#host.toast(`Could not publish the answer on ${this.#host.settings.ask.answerTopic}`);
+          this.#host.toast(`Could not publish the answer on ${request.answerTopic}`);
           return;
         }
         this.#record({ text: request.text, answer: option, by: "you", at: Date.now() });

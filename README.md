@@ -376,6 +376,28 @@ mission_runner's `ask_user` step is the same idea with a service to answer on
 (`/mission/answer`), and the Dashboard drives that too when the runner is
 there.
 
+### Topics per station
+
+Mission Builder and mission_runner can give a point its own pair, for example
+`/station/conveyor1/request` and `/station/conveyor1/answer`, so a screen or a
+node at that station only receives its own questions. iViz handles both ways
+of using that:
+
+- **One iViz for every station** (the mock answerer while trying things out):
+  leave the Dashboard's topics as they are. The runner announces every
+  `ros.request` on `/mission/event` together with the two topics it chose; iViz
+  shows the question and answers it on that station's answer topic. The card
+  says `answers on /station/conveyor1/answer`, the Topics block lists the
+  station pairs picked up so far, and iViz keeps listening on them for the
+  session.
+- **One iViz at each station**: set that iViz's Dashboard **Requests** and
+  **Answers** to the station's pair.
+
+**Answer by hand** has an **Answer topic** field. Left empty, it uses the topic
+that came with the request, so answering a station by hand reaches the
+station. A node that asks without mission_runner is only heard on the
+Dashboard's pair, because there is no event naming its topics.
+
 To try it without a robot:
 
 ```bash
@@ -383,7 +405,9 @@ npm run mock -- 8765 --ask --auto-answer
 ```
 
 `--ask` asks a question every 25 seconds, and `--auto-answer` answers requests
-that iViz publishes, standing in for a node of yours.
+that iViz publishes, standing in for a node of yours. `--stations` imitates
+mission_runner with two stations asking in turn on their own topics, and logs
+any answer sent to the wrong one.
 
 ## Typical setups
 
