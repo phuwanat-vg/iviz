@@ -1,6 +1,6 @@
 import type { SettingsValues } from "../viz/layers/Layer";
 import type { Pose2D } from "../nav/NavController";
-import type { ExportFormat, PathVertex } from "../nav/pathShape";
+import type { ExportFormat, PathVertex, WaypointFormat } from "../nav/pathShape";
 
 export interface PersistedLayer {
   topic: string;
@@ -98,6 +98,8 @@ export interface NavSettings {
   path: PathVertex[];
   /** How the path is copied out as coordinates. */
   pathExport: PathExportSettings;
+  /** How the waypoints are copied out as coordinates. */
+  waypointExport: WaypointExportSettings;
   mapTopic: string;
 }
 
@@ -111,6 +113,13 @@ export interface PathExportSettings {
 }
 
 export const DEFAULT_PATH_EXPORT: PathExportSettings = { step: 0.2, format: "xy", robotStart: true, decimals: 3 };
+
+export interface WaypointExportSettings {
+  format: WaypointFormat;
+  decimals: number;
+}
+
+export const DEFAULT_WAYPOINT_EXPORT: WaypointExportSettings = { format: "xyyaw", decimals: 3 };
 
 export const DEFAULT_NAV_SETTINGS: NavSettings = {
   navigateToPose: "/navigate_to_pose",
@@ -129,6 +138,7 @@ export const DEFAULT_NAV_SETTINGS: NavSettings = {
   waypoints: [],
   path: [],
   pathExport: DEFAULT_PATH_EXPORT,
+  waypointExport: DEFAULT_WAYPOINT_EXPORT,
   mapTopic: "/map",
 };
 
@@ -176,6 +186,7 @@ export function loadSettings(): AppSettings {
     if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
     if (!Array.isArray(nav.path)) nav.path = [];
     nav.pathExport = { ...DEFAULT_PATH_EXPORT, ...(parsed.nav?.pathExport ?? {}) };
+    nav.waypointExport = { ...DEFAULT_WAYPOINT_EXPORT, ...(parsed.nav?.waypointExport ?? {}) };
     if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
     const ask = { ...DEFAULT_ASK_SETTINGS, ...(parsed.ask ?? {}) };
     const missions = { ...DEFAULT_MISSIONS_SETTINGS, ...(parsed.missions ?? {}) };

@@ -2,6 +2,13 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.9.0 — 2026-09-25
+
+- **Copy waypoint coordinates.** The Waypoints section has its own Copy
+  coordinates: `(x, y, yaw°)` tuples, `make_pose(nav, x, y, yaw°)` calls ready
+  for `nav.followWaypoints(goals)` / `nav.goThroughPoses(goals)`, `(x, y)`, or
+  CSV, in the order listed and with the heading each waypoint was placed with
+
 ## 0.8.0 — 2026-09-25
 
 - **Curved paths.** Drawing a path is now point to point with editing: drag a

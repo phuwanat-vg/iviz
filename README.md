@@ -273,6 +273,15 @@ on the map as dots while the section is open. Formats:
 The coordinates are in the draft's frame (normally `map`); the panel warns when
 it is another one.
 
+Waypoints have a **Copy coordinates** section of their own, in the order they
+are listed, with the heading each was placed with:
+
+- **Python (x, y, yaw°)**: `waypoints = [(x, y, yaw_deg), ...]`
+- **Python make_pose(nav, x, y, yaw°)**: `goals = [make_pose(nav, x, y, yaw), ...]`,
+  ready for `nav.followWaypoints(goals)` or `nav.goThroughPoses(goals)` in a
+  nav2_simple_commander script that defines `make_pose`
+- **Python (x, y)** and **CSV** `x,y,yaw_deg`
+
 ### Before the robot is localized
 
 AMCL waits for an initial pose, and until it has one it publishes no

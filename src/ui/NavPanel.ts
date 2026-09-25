@@ -16,8 +16,8 @@ import type { AppSettings, NavSettings, PathExportSettings } from "../state/sett
 import type { ToolPointerEvent, Viewer } from "../viz/Viewer";
 import { NavOverlayLayer } from "../viz/layers/NavOverlayLayer";
 import { KIND_LABEL, NavController } from "../nav/NavController";
-import { bendHandle, bendToward, curvedLength, formatPath, samplePath, segmentLength, splitSegment } from "../nav/pathShape";
-import type { ExportFormat } from "../nav/pathShape";
+import { bendHandle, bendToward, curvedLength, formatPath, formatWaypoints, samplePath, segmentLength, splitSegment } from "../nav/pathShape";
+import type { ExportFormat, WaypointFormat } from "../nav/pathShape";
 import type { NavPhase, Pose2D, TaskKind } from "../nav/NavController";
 import { defaultMapName, encodeMap, saveMapFiles } from "../nav/mapExport";
 import { fetchMap, findMapService } from "../nav/mapSource";
@@ -124,6 +124,12 @@ export class NavPanel {
   #followBtn!: HTMLButtonElement;
   #pathNote!: HTMLElement;
   #segList!: HTMLElement;
+  #wpExportBox!: HTMLDetailsElement;
+  #wpExportFormat!: HTMLSelectElement;
+  #wpExportDecimals!: HTMLInputElement;
+  #wpExportText!: HTMLElement;
+  #wpExportInfo!: HTMLElement;
+  #wpExportCopy!: HTMLButtonElement;
   #segKey = "";
   #exportBox!: HTMLDetailsElement;
   #exportStep!: HTMLInputElement;
@@ -254,6 +260,7 @@ export class NavPanel {
     this.#startWp = h("button", { class: "primary" });
     this.#startWp.addEventListener("click", () => void this.#startWaypoints());
     this.#wpNote = h("div", { class: "nav-note" });
+    this.#buildWaypointExport();
 
     // Path
     this.#drawBtn = h("button", { title: "Click on the map to add points along the path" }, icon("spline"), "Draw");
@@ -338,6 +345,7 @@ export class NavPanel {
       row("Loop", this.#loopChk),
       h("div", { class: "nav-buttons" }, this.#startWp),
       this.#wpNote,
+      this.#wpExportBox,
       subHeader("Path", "spline"),
       h("div", { class: "nav-buttons" }, this.#drawBtn, this.#pathUndo, this.#pathClear),
       this.#pathInfo,
@@ -418,6 +426,7 @@ export class NavPanel {
     setNote(this.#wpNote, connected && wpReason ? wpReason : nWp === 0 ? "Press Place, then click on the map." : "", connected && wpReason !== "");
     this.#placeBtn.classList.toggle("active-tool", viewer.tool === TOOL_WAYPOINT);
     this.#renderList();
+    this.#renderWaypointExport();
 
     // Path
     const pathReason = c.unavailableReason("path");
@@ -874,6 +883,82 @@ export class NavPanel {
     const frame = nav.draftFrame || this.#goalFrame();
     const notMap = frame !== "map";
     setNote(this.#exportInfo, `${count} points in ${frame}, shown as dots on the map.${notMap ? " A script that stamps 'map' needs the same frame." : ""}`, notMap);
+  }
+
+  #buildWaypointExport(): void {
+    const exp = this.#nav.waypointExport;
+    this.#wpExportFormat = h(
+      "select",
+      {},
+      h("option", { value: "xyyaw", text: "Python (x, y, yaw°)" }),
+      h("option", { value: "make_pose", text: "Python make_pose(nav, x, y, yaw°)" }),
+      h("option", { value: "xy", text: "Python (x, y)" }),
+      h("option", { value: "csv", text: "CSV x,y,yaw_deg" }),
+    );
+    this.#wpExportFormat.value = exp.format;
+    this.#wpExportFormat.addEventListener("change", () => {
+      this.#nav.waypointExport.format = this.#wpExportFormat.value as WaypointFormat;
+      this.#host.persist();
+      this.#renderWaypointExport();
+    });
+    this.#wpExportDecimals = h("input", { type: "number", min: "0", max: "6", step: "1", value: String(exp.decimals) });
+    this.#wpExportDecimals.addEventListener("change", () => {
+      const v = Math.round(Number(this.#wpExportDecimals.value));
+      if (Number.isFinite(v)) this.#nav.waypointExport.decimals = Math.min(6, Math.max(0, v));
+      this.#wpExportDecimals.value = String(this.#nav.waypointExport.decimals);
+      this.#host.persist();
+      this.#renderWaypointExport();
+    });
+    this.#wpExportText = h("pre", { class: "nav-cmd path-export" });
+    this.#wpExportInfo = h("div", { class: "nav-note" });
+    this.#wpExportCopy = h("button", { class: "primary", title: "Copy the waypoints to paste into a script" }, icon("copy"), "Copy");
+    this.#wpExportCopy.addEventListener("click", () => void this.#copyWaypoints());
+    this.#wpExportBox = h(
+      "details",
+      { class: "nav-export" },
+      h("summary", {}, icon("copy"), " Copy coordinates"),
+      row("Format", this.#wpExportFormat),
+      row("Decimals", this.#wpExportDecimals),
+      h("div", { class: "nav-buttons" }, this.#wpExportCopy),
+      this.#wpExportInfo,
+      this.#wpExportText,
+    );
+    this.#wpExportBox.addEventListener("toggle", () => this.#renderWaypointExport());
+  }
+
+  #waypointText(): string {
+    const nav = this.#nav;
+    return formatWaypoints(nav.waypoints, { ...nav.waypointExport, frame: nav.draftFrame || this.#goalFrame() });
+  }
+
+  #renderWaypointExport(): void {
+    const nav = this.#nav;
+    this.#wpExportCopy.disabled = nav.waypoints.length === 0;
+    if (!this.#wpExportBox.open) return;
+    if (nav.waypoints.length === 0) {
+      this.#wpExportText.hidden = true;
+      setNote(this.#wpExportInfo, "Place at least one waypoint.", false);
+      return;
+    }
+    this.#wpExportText.hidden = false;
+    this.#wpExportText.textContent = this.#waypointText();
+    const frame = nav.draftFrame || this.#goalFrame();
+    const notMap = frame !== "map";
+    const hint = nav.waypointExport.format === "make_pose" ? " Pass goals to nav.followWaypoints(goals) or nav.goThroughPoses(goals)." : "";
+    setNote(this.#wpExportInfo, `${nav.waypoints.length} waypoints in ${frame}, in the order listed.${hint}${notMap ? " A script that stamps 'map' needs the same frame." : ""}`, notMap);
+  }
+
+  async #copyWaypoints(): Promise<void> {
+    const n = this.#nav.waypoints.length;
+    if (n === 0) return;
+    try {
+      await navigator.clipboard.writeText(this.#waypointText());
+      this.#host.toast(`Copied ${n} waypoint${n === 1 ? "" : "s"}`, "info");
+    } catch {
+      this.#wpExportBox.open = true;
+      this.#renderWaypointExport();
+      this.#host.toast("The clipboard is not available; select the text under Copy coordinates instead");
+    }
   }
 
   #exportResult(): { text: string; count: number } {

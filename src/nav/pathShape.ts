@@ -206,10 +206,16 @@ export interface ExportOptions {
   frame: string;
 }
 
-/** The sampled path as text to paste into code: a Python list or CSV. */
-export function formatPath(path: PathVertex[], options: ExportOptions): { text: string; count: number } {
-  const poses = samplePath(path, options.step);
-  const d = Math.min(6, Math.max(0, Math.round(options.decimals)));
+/** A list of poses as Python tuples, `make_pose(...)` calls, or CSV. */
+function formatPoses(
+  poses: Pose2D[],
+  format: ExportFormat | WaypointFormat,
+  decimals: number,
+  summary: string,
+  varName: string,
+  robotStart: boolean,
+): string {
+  const d = Math.min(6, Math.max(0, Math.round(decimals)));
   const num = (v: number): string => {
     const s = v.toFixed(d);
     return s === `-${(0).toFixed(d)}` ? (0).toFixed(d) : s;
@@ -218,14 +224,34 @@ export function formatPath(path: PathVertex[], options: ExportOptions): { text: 
     const s = ((yaw * 180) / Math.PI).toFixed(1);
     return s === "-0.0" ? "0.0" : s;
   };
+  if (format === "csv") return ["x,y,yaw_deg", ...poses.map((p) => `${num(p.x)},${num(p.y)},${deg(p.yaw)}`)].join("\n");
+  const row = (p: Pose2D): string => {
+    if (format === "xyyaw") return `    (${num(p.x)}, ${num(p.y)}, ${deg(p.yaw)}),`;
+    if (format === "make_pose") return `    make_pose(nav, ${num(p.x)}, ${num(p.y)}, ${deg(p.yaw)}),`;
+    return `    (${num(p.x)}, ${num(p.y)}),`;
+  };
+  const note = format === "xyyaw" ? "; (x, y, yaw_deg)" : format === "make_pose" ? "; make_pose(nav, x, y, yaw_deg)" : "";
+  const lines = [`# ${summary}${note}`, `${varName} = [`];
+  if (robotStart) lines.push(format === "xyyaw" ? "    (rx, ry, 0.0)," : "    (rx, ry),");
+  lines.push(...poses.map(row), "]");
+  return lines.join("\n");
+}
+
+/** The sampled path as text to paste into code: a Python list or CSV. */
+export function formatPath(path: PathVertex[], options: ExportOptions): { text: string; count: number } {
+  const poses = samplePath(path, options.step);
   const summary = `${poses.length} points, at most ${options.step} m apart, ${curvedLength(path).toFixed(2)} m, frame ${options.frame || "(unset)"}`;
-  if (options.format === "csv") {
-    const lines = ["x,y,yaw_deg", ...poses.map((p) => `${num(p.x)},${num(p.y)},${deg(p.yaw)}`)];
-    return { text: lines.join("\n"), count: poses.length };
-  }
-  const rows = poses.map((p) => (options.format === "xyyaw" ? `    (${num(p.x)}, ${num(p.y)}, ${deg(p.yaw)}),` : `    (${num(p.x)}, ${num(p.y)}),`));
-  const lines = [`# ${summary}${options.format === "xyyaw" ? "; (x, y, yaw_deg)" : ""}`, "points = ["];
-  if (options.robotStart) lines.push(options.format === "xyyaw" ? "    (rx, ry, 0.0)," : "    (rx, ry),");
-  lines.push(...rows, "]");
-  return { text: lines.join("\n"), count: poses.length };
+  return { text: formatPoses(poses, options.format, options.decimals, summary, "points", options.robotStart && options.format !== "csv"), count: poses.length };
+}
+
+export type WaypointFormat = "xyyaw" | "make_pose" | "xy" | "csv";
+
+/**
+ * Waypoints as text to paste into code. `make_pose` gives the calls a
+ * nav2_simple_commander script builds its goals with, ready for
+ * `nav.followWaypoints(goals)` or `nav.goThroughPoses(goals)`.
+ */
+export function formatWaypoints(poses: Pose2D[], options: { format: WaypointFormat; decimals: number; frame: string }): string {
+  const summary = `${poses.length} waypoint${poses.length === 1 ? "" : "s"}, frame ${options.frame || "(unset)"}`;
+  return formatPoses(poses, options.format, options.decimals, summary, options.format === "make_pose" ? "goals" : "waypoints", false);
 }
