@@ -12,10 +12,12 @@ import type { FoxgloveConnection } from "../net/FoxgloveConnection";
 import type { TfTree } from "../ros/TfTree";
 import type { OccupancyGrid } from "../ros/types";
 import { DEFAULT_NAV_SETTINGS } from "../state/settings";
-import type { AppSettings, NavSettings } from "../state/settings";
+import type { AppSettings, NavSettings, PathExportSettings } from "../state/settings";
 import type { ToolPointerEvent, Viewer } from "../viz/Viewer";
 import { NavOverlayLayer } from "../viz/layers/NavOverlayLayer";
-import { KIND_LABEL, NavController, densifyPath, pathLength } from "../nav/NavController";
+import { KIND_LABEL, NavController } from "../nav/NavController";
+import { bendHandle, bendToward, curvedLength, formatPath, samplePath, segmentLength, splitSegment } from "../nav/pathShape";
+import type { ExportFormat } from "../nav/pathShape";
 import type { NavPhase, Pose2D, TaskKind } from "../nav/NavController";
 import { defaultMapName, encodeMap, saveMapFiles } from "../nav/mapExport";
 import { fetchMap, findMapService } from "../nav/mapSource";
@@ -68,6 +70,15 @@ interface StatusView {
 
 type DraftList = "waypoints" | "path";
 
+/** Spacing of the poses sent to FollowPath. */
+const FOLLOW_STEP = 0.05;
+/** How close to a point or a bend handle, in screen pixels, grabs it. */
+const GRAB_PX = 10;
+/** Two clicks on a bend handle within this many ms straighten the segment. */
+const DOUBLE_CLICK_MS = 400;
+
+type PathHit = { kind: "vertex" | "bend"; index: number };
+
 const _m = new Matrix4();
 const _v = new Vector3();
 
@@ -82,6 +93,8 @@ export class NavPanel {
   #dragStart?: Pose2D;
   #preview?: Pose2D;
   #draftVersion = 0;
+  #pathDrag?: { kind: "vertex" | "bend"; index: number; moved: boolean };
+  #lastBendClick = { index: -1, at: 0 };
   #overlayKey = "";
   #listKey = "";
   #diagKey = "";
@@ -110,6 +123,16 @@ export class NavPanel {
   #pathInfo!: HTMLElement;
   #followBtn!: HTMLButtonElement;
   #pathNote!: HTMLElement;
+  #segList!: HTMLElement;
+  #segKey = "";
+  #exportBox!: HTMLDetailsElement;
+  #exportStep!: HTMLInputElement;
+  #exportFormat!: HTMLSelectElement;
+  #exportRobot!: HTMLInputElement;
+  #exportDecimals!: HTMLInputElement;
+  #exportText!: HTMLElement;
+  #exportInfo!: HTMLElement;
+  #exportCopy!: HTMLButtonElement;
   #mapName!: HTMLInputElement;
   #robotSaveBtn!: HTMLButtonElement;
   #pcSaveBtn!: HTMLButtonElement;
@@ -136,7 +159,12 @@ export class NavPanel {
       onPointerMove: (e) => this.#waypointMove(e),
       onPointerUp: () => this.#waypointUp(),
     });
-    host.viewer.registerTool(TOOL_PATH, { cursor: "crosshair", onPointerDown: (e) => this.#pathDown(e) });
+    host.viewer.registerTool(TOOL_PATH, {
+      cursor: "crosshair",
+      onPointerDown: (e) => this.#pathDown(e),
+      onPointerMove: (e) => this.#pathMove(e),
+      onPointerUp: () => this.#pathUp(),
+    });
 
     this.#disposers.push(this.controller.onChange(() => this.#render()));
     this.#disposers.push(host.conn.onServicesChange(() => this.#render()));
@@ -158,7 +186,9 @@ export class NavPanel {
   /** Hint shown over the map while a navigation tool is active. */
   hintFor(tool: string): string | undefined {
     if (tool === TOOL_WAYPOINT) return "Waypoints: click to place, drag to set the heading. Backspace removes the last one, Esc to finish.";
-    if (tool === TOOL_PATH) return "Path: click along the route. Backspace removes the last point, Esc to finish.";
+    if (tool === TOOL_PATH) {
+      return "Path: click to add points. Drag a point to move it, Shift-click to remove it. Drag the white handle in a segment to bend it, double-click it to straighten, Ctrl-click to split. Backspace removes the last point, Esc to finish.";
+    }
     return undefined;
   }
 
@@ -167,6 +197,7 @@ export class NavPanel {
       this.#dragStart = undefined;
       this.#preview = undefined;
     }
+    if (tool !== TOOL_PATH) this.#pathDrag = undefined;
     this.#render(true);
   }
 
@@ -233,6 +264,8 @@ export class NavPanel {
     this.#followBtn = h("button", { class: "primary", title: "The controller follows this path exactly, without the planner" }, icon("play"), "Follow path");
     this.#followBtn.addEventListener("click", () => void this.#followPath());
     this.#pathNote = h("div", { class: "nav-note" });
+    this.#segList = h("div", { class: "nav-list nav-segs" });
+    this.#buildExport();
 
     // Map
     this.#mapName = h("input", {
@@ -308,8 +341,10 @@ export class NavPanel {
       subHeader("Path", "spline"),
       h("div", { class: "nav-buttons" }, this.#drawBtn, this.#pathUndo, this.#pathClear),
       this.#pathInfo,
+      this.#segList,
       h("div", { class: "nav-buttons" }, this.#followBtn),
       this.#pathNote,
+      this.#exportBox,
       subHeader("Map", "map"),
       row("Name", this.#mapName),
       h("div", { class: "nav-buttons" }, this.#robotSaveBtn, this.#pcSaveBtn),
@@ -389,7 +424,9 @@ export class NavPanel {
     const nPath = nav.path.length;
     this.#pathUndo.disabled = nPath === 0;
     this.#pathClear.disabled = nPath === 0;
-    this.#pathInfo.textContent = nPath > 0 ? `${nPath} point${nPath === 1 ? "" : "s"} · ${pathLength(nav.path).toFixed(1)} m` : "Press Draw, then click along the route.";
+    this.#pathInfo.textContent = nPath > 0 ? `${nPath} point${nPath === 1 ? "" : "s"} · ${curvedLength(nav.path).toFixed(2)} m` : "Press Draw, then click along the route.";
+    this.#renderSegments();
+    this.#renderExport();
     this.#followBtn.disabled = nPath < 2 || pathReason !== "";
     setNote(this.#pathNote, connected ? pathReason : "", connected && pathReason !== "");
     this.#drawBtn.classList.toggle("active-tool", viewer.tool === TOOL_PATH);
@@ -514,13 +551,18 @@ export class NavPanel {
     const nav = this.#nav;
     const showActive = !!task && (c.active || c.phase === "paused");
     const preview = this.#preview ? `${this.#preview.x},${this.#preview.y},${this.#preview.yaw}` : "";
-    const key = `${this.#draftVersion}|${nav.draftFrame}|${preview}|${showActive ? `${c.phase}|${c.progress.index}|${task!.poses.length}` : ""}`;
+    const editing = this.#host.viewer.tool === TOOL_PATH;
+    const showSamples = this.#exportBox.open && nav.path.length > 1;
+    const exp = nav.pathExport;
+    const key = `${this.#draftVersion}|${nav.draftFrame}|${preview}|${editing}|${showSamples ? exp.step : ""}|${showActive ? `${c.phase}|${c.progress.index}|${task!.poses.length}` : ""}`;
     if (!force && key === this.#overlayKey) return;
     this.#overlayKey = key;
     this.#overlay.setState({
       frame: nav.draftFrame,
       waypoints: nav.waypoints,
       path: nav.path,
+      handles: editing,
+      samples: showSamples ? samplePath(nav.path, exp.step) : undefined,
       preview: this.#preview,
       active: showActive && task ? { kind: task.kind, frame: task.frame, poses: task.poses, index: c.progress.index, running: c.active } : undefined,
     });
@@ -537,7 +579,7 @@ export class NavPanel {
   async #followPath(): Promise<void> {
     const nav = this.#nav;
     if (nav.path.length < 2) return;
-    await this.#start("path", densifyPath(nav.path), nav.draftFrame || this.#goalFrame());
+    await this.#start("path", samplePath(nav.path, FOLLOW_STEP), nav.draftFrame || this.#goalFrame());
   }
 
   async #start(kind: TaskKind, poses: Pose2D[], frame: string): Promise<void> {
@@ -606,10 +648,251 @@ export class NavPanel {
     const p = ev.world ? this.#toDraft(ev.world.x, ev.world.y) : undefined;
     if (!p) return;
     const path = this.#nav.path;
+    const hit = this.#pathHit(p, ev.worldPerPixel);
+    if (hit?.kind === "vertex") {
+      if (ev.shiftKey) {
+        this.#editDraft(() => path.splice(hit.index, 1));
+        return;
+      }
+      this.#pathDrag = { kind: "vertex", index: hit.index, moved: false };
+      return;
+    }
+    if (hit?.kind === "bend") {
+      if (ev.ctrlKey || ev.native.metaKey) {
+        this.#editDraft(() => (this.#nav.path = splitSegment(path, hit.index)));
+        return;
+      }
+      // A second click soon after a click (not a drag) on the same handle.
+      const again = this.#lastBendClick.index === hit.index && performance.now() - this.#lastBendClick.at < DOUBLE_CLICK_MS;
+      this.#lastBendClick = { index: -1, at: 0 };
+      if (again) {
+        this.#straighten(hit.index);
+        return;
+      }
+      this.#pathDrag = { kind: "bend", index: hit.index, moved: false };
+      return;
+    }
     const prev = path[path.length - 1];
     if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) < 0.05) return;
     const yaw = prev ? Math.atan2(p.y - prev.y, p.x - prev.x) : 0;
     this.#editDraft(() => path.push({ x: p.x, y: p.y, yaw }));
+    // Keep the button held to put the new point exactly where it belongs.
+    this.#pathDrag = { kind: "vertex", index: path.length - 1, moved: false };
+  }
+
+  #pathMove(ev: ToolPointerEvent): void {
+    if (!ev.world) return;
+    const drag = this.#pathDrag;
+    const p = this.#toDraft(ev.world.x, ev.world.y, true);
+    if (!p) return;
+    if (!drag) {
+      const hit = this.#pathHit(p, ev.worldPerPixel);
+      this.#host.viewer.setToolCursor(hit?.kind === "vertex" ? "move" : hit?.kind === "bend" ? "grab" : "crosshair");
+      return;
+    }
+    const path = this.#nav.path;
+    if (drag.kind === "vertex") {
+      const v = path[drag.index];
+      if (!v) return;
+      v.x = p.x;
+      v.y = p.y;
+    } else {
+      const a = path[drag.index];
+      if (!a) return;
+      a.bend = round3(bendToward(path, drag.index, p));
+    }
+    drag.moved = true;
+    this.#draftVersion++;
+    this.#render();
+  }
+
+  #pathUp(): void {
+    const drag = this.#pathDrag;
+    this.#pathDrag = undefined;
+    if (drag?.kind === "bend" && !drag.moved) this.#lastBendClick = { index: drag.index, at: performance.now() };
+    if (drag?.moved) this.#editDraft(() => undefined);
+  }
+
+  /** The point or bend handle under the pointer; points win over handles. */
+  #pathHit(p: { x: number; y: number }, worldPerPixel: number): PathHit | undefined {
+    const path = this.#nav.path;
+    const reach = GRAB_PX * worldPerPixel;
+    let best: PathHit | undefined;
+    let bestD = reach;
+    path.forEach((v, i) => {
+      const d = Math.hypot(v.x - p.x, v.y - p.y);
+      if (d <= bestD) {
+        best = { kind: "vertex", index: i };
+        bestD = d;
+      }
+    });
+    if (best) return best;
+    for (let i = 0; i < path.length - 1; i++) {
+      const hp = bendHandle(path, i);
+      if (!hp) continue;
+      const d = Math.hypot(hp.x - p.x, hp.y - p.y);
+      if (d <= bestD) {
+        best = { kind: "bend", index: i };
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  #setBend(index: number, bend: number): void {
+    const v = this.#nav.path[index];
+    if (!v) return;
+    this.#editDraft(() => (v.bend = bend === 0 ? undefined : bend));
+  }
+
+  #straighten(index: number): void {
+    const v = this.#nav.path[index];
+    if (!v) return;
+    this.#editDraft(() => {
+      v.bend = undefined;
+      v.skew = undefined;
+    });
+  }
+
+  // ----- path segments and export ------------------------------------------
+
+  #renderSegments(): void {
+    const path = this.#nav.path;
+    const key = `${this.#draftVersion}|${path.length}`;
+    if (key === this.#segKey) return;
+    this.#segKey = key;
+    this.#segList.hidden = path.length < 2;
+    if (path.length < 2) {
+      this.#segList.replaceChildren();
+      return;
+    }
+    const rows: HTMLElement[] = [];
+    for (let i = 0; i < path.length - 1; i++) {
+      const bend = h("input", {
+        type: "number",
+        step: "0.05",
+        value: String(round3(path[i]!.bend ?? 0)),
+        title: "Bend in metres: how far the middle of the curve sits off the straight line, + to the left",
+      });
+      bend.addEventListener("change", () => {
+        const v = Number(bend.value);
+        if (Number.isFinite(v)) this.#setBend(i, round3(v));
+      });
+      const straight = iconButton("minus", "Straighten this segment", () => this.#straighten(i));
+      const split = iconButton("plus", "Add a point in the middle of this segment", () => this.#editDraft(() => (this.#nav.path = splitSegment(this.#nav.path, i))));
+      straight.disabled = !path[i]!.bend && !path[i]!.skew;
+      rows.push(
+        h(
+          "div",
+          { class: "nav-seg" },
+          h("span", { class: "num", text: `${i + 1}→${i + 2}` }),
+          h("span", { class: "len", text: `${segmentLength(path, i).toFixed(2)} m` }),
+          h("label", { class: "bend" }, "bend", bend),
+          h("span", { class: "acts" }, straight, split),
+        ),
+      );
+    }
+    this.#segList.replaceChildren(...rows);
+  }
+
+  #buildExport(): void {
+    const exp = (): PathExportSettings => this.#nav.pathExport;
+    const changed = (): void => {
+      this.#host.persist();
+      this.#renderExport();
+      this.#pushOverlay(true);
+    };
+    this.#exportStep = h("input", { type: "number", min: "0.01", step: "0.05", value: String(exp().step), title: "Largest distance between two copied points, in metres" });
+    this.#exportStep.addEventListener("change", () => {
+      const v = Number(this.#exportStep.value);
+      if (Number.isFinite(v) && v > 0) exp().step = Math.max(0.01, v);
+      this.#exportStep.value = String(exp().step);
+      changed();
+    });
+    this.#exportFormat = h(
+      "select",
+      {},
+      h("option", { value: "xy", text: "Python (x, y)" }),
+      h("option", { value: "xyyaw", text: "Python (x, y, yaw°)" }),
+      h("option", { value: "csv", text: "CSV x,y,yaw_deg" }),
+    );
+    this.#exportFormat.value = exp().format;
+    this.#exportFormat.addEventListener("change", () => {
+      exp().format = this.#exportFormat.value as ExportFormat;
+      changed();
+    });
+    this.#exportRobot = h("input", { type: "checkbox", title: "Begin the list with (rx, ry), the robot position a script reads from TF" });
+    this.#exportRobot.checked = exp().robotStart;
+    this.#exportRobot.addEventListener("change", () => {
+      exp().robotStart = this.#exportRobot.checked;
+      changed();
+    });
+    this.#exportDecimals = h("input", { type: "number", min: "0", max: "6", step: "1", value: String(exp().decimals) });
+    this.#exportDecimals.addEventListener("change", () => {
+      const v = Math.round(Number(this.#exportDecimals.value));
+      if (Number.isFinite(v)) exp().decimals = Math.min(6, Math.max(0, v));
+      this.#exportDecimals.value = String(exp().decimals);
+      changed();
+    });
+    this.#exportText = h("pre", { class: "nav-cmd path-export" });
+    this.#exportInfo = h("div", { class: "nav-note" });
+    this.#exportCopy = h("button", { class: "primary", title: "Copy the coordinates to paste into a script" }, icon("copy"), "Copy");
+    this.#exportCopy.addEventListener("click", () => void this.#copyExport());
+    this.#exportBox = h(
+      "details",
+      { class: "nav-export" },
+      h("summary", {}, icon("copy"), " Copy coordinates"),
+      row("Spacing (m)", this.#exportStep),
+      row("Format", this.#exportFormat),
+      row("Start with (rx, ry)", this.#exportRobot),
+      row("Decimals", this.#exportDecimals),
+      h("div", { class: "nav-buttons" }, this.#exportCopy),
+      this.#exportInfo,
+      this.#exportText,
+    );
+    this.#exportBox.addEventListener("toggle", () => {
+      this.#renderExport();
+      this.#pushOverlay(true);
+    });
+  }
+
+  #renderExport(): void {
+    const nav = this.#nav;
+    const exp = nav.pathExport;
+    this.#exportRobot.disabled = exp.format === "csv";
+    this.#exportCopy.disabled = nav.path.length < 2;
+    if (!this.#exportBox.open) return;
+    if (nav.path.length < 2) {
+      this.#exportText.textContent = "";
+      this.#exportText.hidden = true;
+      setNote(this.#exportInfo, "Draw a path with at least two points.", false);
+      return;
+    }
+    const { text, count } = this.#exportResult();
+    this.#exportText.hidden = false;
+    this.#exportText.textContent = text;
+    const frame = nav.draftFrame || this.#goalFrame();
+    const notMap = frame !== "map";
+    setNote(this.#exportInfo, `${count} points in ${frame}, shown as dots on the map.${notMap ? " A script that stamps 'map' needs the same frame." : ""}`, notMap);
+  }
+
+  #exportResult(): { text: string; count: number } {
+    const nav = this.#nav;
+    const exp = nav.pathExport;
+    return formatPath(nav.path, { ...exp, robotStart: exp.robotStart && exp.format !== "csv", frame: nav.draftFrame || this.#goalFrame() });
+  }
+
+  async #copyExport(): Promise<void> {
+    if (this.#nav.path.length < 2) return;
+    const { text, count } = this.#exportResult();
+    try {
+      await navigator.clipboard.writeText(text);
+      this.#host.toast(`Copied ${count} points`, "info");
+    } catch {
+      this.#exportBox.open = true;
+      this.#renderExport();
+      this.#host.toast("The clipboard is not available; select the text under Copy coordinates instead");
+    }
   }
 
   /** Append the robot's current position and heading as a waypoint. */
@@ -668,12 +951,12 @@ export class NavPanel {
   };
 
   /** A point clicked in the fixed frame, expressed in the draft's frame. */
-  #toDraft(x: number, y: number): Pose2D | undefined {
+  #toDraft(x: number, y: number, quiet = false): Pose2D | undefined {
     const nav = this.#nav;
     if (nav.waypoints.length === 0 && nav.path.length === 0) nav.draftFrame = this.#goalFrame();
     const frame = nav.draftFrame || this.#goalFrame();
     if (!this.#host.tf.lookup(frame, this.#host.viewer.fixedFrame, _m)) {
-      this.#host.toast(`Cannot place points: no transform from ${this.#host.viewer.fixedFrame} to ${frame}`);
+      if (!quiet) this.#host.toast(`Cannot place points: no transform from ${this.#host.viewer.fixedFrame} to ${frame}`);
       return undefined;
     }
     _v.set(x, y, 0).applyMatrix4(_m);
@@ -814,4 +1097,8 @@ function formatDuration(sec: number): string {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+function round3(v: number): number {
+  return Math.round(v * 1000) / 1000;
 }

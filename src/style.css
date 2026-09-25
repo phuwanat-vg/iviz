@@ -1261,6 +1261,65 @@ label.inline-check {
 .nav-setup > summary:hover {
   color: var(--text);
 }
+.nav-seg {
+  display: grid;
+  grid-template-columns: 34px 58px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.nav-seg:hover {
+  background: var(--panel-2);
+}
+.nav-seg .num,
+.nav-seg .len {
+  color: var(--muted);
+}
+.nav-seg .bend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.nav-seg .bend input {
+  width: 64px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.nav-seg .acts {
+  display: flex;
+  gap: 2px;
+}
+.nav-seg .acts button {
+  padding: 1px 3px;
+}
+.nav-seg .acts svg.icon {
+  width: 12px;
+  height: 12px;
+}
+.nav-export {
+  margin-top: 6px;
+}
+.nav-export > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 0;
+}
+.nav-export .row input[type="number"] {
+  width: 80px;
+}
+.path-export {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre;
+  word-break: normal;
+}
 .nav-cmd {
   margin: 4px 0;
   padding: 4px 6px;

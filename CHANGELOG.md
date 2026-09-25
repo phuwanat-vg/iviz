@@ -2,6 +2,21 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.8.0 — 2026-09-25
+
+- **Curved paths.** Drawing a path is now point to point with editing: drag a
+  point to move it, Shift-click to remove it, drag the white handle in the
+  middle of a segment to bend it (the curve passes through the handle),
+  double-click the handle to straighten, Ctrl-click it to add a point without
+  changing the curve. A segment list shows each length and its bend in metres,
+  which can be typed
+- **Copy coordinates**: the path sampled at a spacing you choose, as a Python
+  `points = [(x, y), ...]` list (optionally starting with `(rx, ry)`), with
+  headings, or as CSV. Clicked points are always kept, and the samples show on
+  the map while the section is open
+- Follow path sends the curve every 5 cm with headings along it, and the last
+  pose faces the way the path arrives
+
 ## 0.7.0 — 2026-09-13
 
 - **Missions on the Dashboard.** A Missions section at the top of the

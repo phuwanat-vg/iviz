@@ -224,7 +224,7 @@ services behind actions (`/_action/...`) are left out of the sidebar lists.
 |---|---|---|
 | 2D Nav Goal | top bar, click and drag | `/navigate_to_pose` action, or `/goal_pose` when actions are hidden |
 | Waypoints | **Place**, click on the map (drag sets the heading), or **Robot pose** for where the robot stands; then **Start** | `/follow_waypoints` stops at each one, `/navigate_through_poses` drives through them |
-| Follow path | **Draw**, click along the route, **Follow path** | `/follow_path` on the controller server, without the planner |
+| Follow path | **Draw**, click point to point, bend segments, **Follow path** | `/follow_path` on the controller server, without the planner |
 | Pause / Resume | status bar | cancels the goal and keeps the task; Resume sends what is left |
 | Cancel | status bar | cancels every goal on the four action servers, whoever sent it |
 | Save on robot | Map | `nav2_msgs/srv/SaveMap` (map_saver) or `slam_toolbox/srv/SaveMap` |
@@ -240,6 +240,38 @@ the path from the point nearest to where the robot stands (the robot frame is
 set in Setup). Goals are stamped with time zero, which tf2 reads as "the latest
 transform", so a clock difference between the PC and the robot does not get
 them rejected.
+
+### Drawing a path and copying its coordinates
+
+Press **Draw** and click point to point on the map. While Draw is on:
+
+| To | Do |
+|---|---|
+| add a point | click on the map; keep the button held to place it exactly |
+| move a point | drag it |
+| remove a point | Shift-click it, or Backspace for the last one |
+| bend a segment | drag the white handle in its middle; the curve passes through it |
+| straighten a segment | double-click its handle |
+| add a point inside a segment | Ctrl-click its handle (the curve stays the same) |
+
+The panel lists every segment with its length and its **bend** in metres (how
+far the middle of the curve sits off the straight line, + to the left), which
+can be typed for exact values; the – and + buttons straighten and split.
+**Follow path** sends the curve to FollowPath every 5 cm, facing along it.
+
+**Copy coordinates** turns the path into text for a script. **Spacing** is the
+largest distance between two points; every clicked point is kept exactly, and
+each segment is split into equal pieces no longer than that. The points show
+on the map as dots while the section is open. Formats:
+
+- **Python (x, y)**: `points = [(x, y), ...]`, with `(rx, ry)` first when
+  **Start with (rx, ry)** is ticked, so it pastes straight into a script that
+  reads the robot position from TF and feeds `make_path(nav, points)`
+- **Python (x, y, yaw°)**: the same with the heading along the curve
+- **CSV**: `x,y,yaw_deg`
+
+The coordinates are in the draft's frame (normally `map`); the panel warns when
+it is another one.
 
 ### Before the robot is localized
 

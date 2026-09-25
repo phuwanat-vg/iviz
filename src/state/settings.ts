@@ -1,5 +1,6 @@
 import type { SettingsValues } from "../viz/layers/Layer";
 import type { Pose2D } from "../nav/NavController";
+import type { ExportFormat, PathVertex } from "../nav/pathShape";
 
 export interface PersistedLayer {
   topic: string;
@@ -93,9 +94,23 @@ export interface NavSettings {
   /** Frame the drafted waypoints and path were placed in. */
   draftFrame: string;
   waypoints: Pose2D[];
-  path: Pose2D[];
+  /** The drawn path: clicked points, each with the bend of the segment after it. */
+  path: PathVertex[];
+  /** How the path is copied out as coordinates. */
+  pathExport: PathExportSettings;
   mapTopic: string;
 }
+
+export interface PathExportSettings {
+  /** Largest distance between two copied points, in metres. */
+  step: number;
+  format: ExportFormat;
+  /** Begin the list with `(rx, ry)`, the robot position read in the script. */
+  robotStart: boolean;
+  decimals: number;
+}
+
+export const DEFAULT_PATH_EXPORT: PathExportSettings = { step: 0.2, format: "xy", robotStart: true, decimals: 3 };
 
 export const DEFAULT_NAV_SETTINGS: NavSettings = {
   navigateToPose: "/navigate_to_pose",
@@ -113,6 +128,7 @@ export const DEFAULT_NAV_SETTINGS: NavSettings = {
   draftFrame: "",
   waypoints: [],
   path: [],
+  pathExport: DEFAULT_PATH_EXPORT,
   mapTopic: "/map",
 };
 
@@ -159,6 +175,7 @@ export function loadSettings(): AppSettings {
     nav.idsRevision = 2;
     if (!Array.isArray(nav.waypoints)) nav.waypoints = [];
     if (!Array.isArray(nav.path)) nav.path = [];
+    nav.pathExport = { ...DEFAULT_PATH_EXPORT, ...(parsed.nav?.pathExport ?? {}) };
     if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
     const ask = { ...DEFAULT_ASK_SETTINGS, ...(parsed.ask ?? {}) };
     const missions = { ...DEFAULT_MISSIONS_SETTINGS, ...(parsed.missions ?? {}) };

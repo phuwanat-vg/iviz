@@ -425,29 +425,6 @@ export function buildGoal(task: NavTask, startIndex: number): Msg {
 // Geometry
 
 /** Resample a polyline every `step` metres, heading along the line. */
-export function densifyPath(vertices: Pose2D[], step = 0.05): Pose2D[] {
-  if (vertices.length < 2) return vertices.map((v) => ({ ...v }));
-  const out: Pose2D[] = [];
-  for (let i = 0; i < vertices.length - 1; i++) {
-    const a = vertices[i]!;
-    const b = vertices[i + 1]!;
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    if (len < 1e-6) continue;
-    const yaw = Math.atan2(b.y - a.y, b.x - a.x);
-    const n = Math.max(1, Math.ceil(len / step));
-    for (let k = 0; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n, yaw });
-  }
-  const last = vertices[vertices.length - 1]!;
-  out.push({ x: last.x, y: last.y, yaw: out.length ? out[out.length - 1]!.yaw : last.yaw });
-  return out;
-}
-
-export function pathLength(points: Pose2D[]): number {
-  let d = 0;
-  for (let i = 1; i < points.length; i++) d += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y);
-  return d;
-}
-
 function nearestIndex(points: Pose2D[], p: Pose2D, from: number): number {
   let best = clamp(from, 0, points.length - 1);
   let bestD = Infinity;

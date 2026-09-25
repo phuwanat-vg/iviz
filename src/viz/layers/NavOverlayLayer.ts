@@ -25,13 +25,19 @@ import { Layer, disposeObject } from "./Layer";
 import type { LayerContext, SettingsSchema } from "./Layer";
 import type { Viewer } from "../Viewer";
 import type { Pose2D, TaskKind } from "../../nav/NavController";
+import { bendHandle, curvePolyline } from "../../nav/pathShape";
+import type { PathVertex } from "../../nav/pathShape";
 
 export interface NavOverlayState {
   /** Frame the drafts are in. */
   frame: string;
   waypoints: Pose2D[];
-  /** Vertices of the drawn path. */
-  path: Pose2D[];
+  /** Clicked points of the drawn path, with the bend of each segment. */
+  path: PathVertex[];
+  /** Show the bend handles in the middle of each segment (while editing). */
+  handles?: boolean;
+  /** The points that would be copied out, shown so the spacing can be seen. */
+  samples?: Pose2D[];
   /** The waypoint being placed, while the mouse is held. */
   preview?: Pose2D;
   active?: {
@@ -48,6 +54,8 @@ const COLOR = {
   current: "#3ccf7a",
   done: "#6b7482",
   path: "#40c8ff",
+  handle: "#ffffff",
+  sample: "#f2b134",
   activePath: "#3ccf7a",
 };
 
@@ -126,8 +134,17 @@ export class NavOverlayLayer extends Layer {
 
     // Drawn path (draft), unless the same path is being followed.
     if (st.path.length > 0 && active?.kind !== "path") {
-      this.#polyline(st.path, COLOR.path, 0.9);
-      this.#dots(st.path, COLOR.path, 7);
+      this.#polyline(curvePolyline(st.path), COLOR.path, 0.9);
+      if (st.samples && st.samples.length > 0) this.#dots(st.samples, COLOR.sample, 4);
+      this.#dots(st.path, COLOR.path, 8);
+      if (st.handles && st.path.length > 1) {
+        const handles: Pose2D[] = [];
+        for (let i = 0; i < st.path.length - 1; i++) {
+          const hp = bendHandle(st.path, i);
+          if (hp) handles.push({ x: hp.x, y: hp.y, yaw: 0 });
+        }
+        this.#dots(handles, COLOR.handle, 6);
+      }
     }
 
     if (active?.kind === "path") {
