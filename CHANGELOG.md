@@ -2,6 +2,21 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.10.0 — 2026-09-25
+
+- **Teleop** tab: drive the robot by hand. A pad of arrows (hold to move, let
+  go to stop, corners arc, the middle row turns in place), sliders for the
+  linear and angular speed, and a stop button
+- **Keyboard control** with teleop_twist_keyboard's keys (u i o / j k l /
+  m , .) and the arrow keys, Space or k to stop, q/z w/x e/c for the speeds.
+  The keys only drive while the Teleop tab is open, and never while typing
+- The topic is set in the tab (`/cmd_vel` by default); Setup picks Twist or
+  TwistStamped (Auto follows the topic's type on the robot), the frame, the
+  stamp, the rate and the slider maxima
+- A zero goes out on release, and when the window loses focus, the tab
+  changes or the connection drops
+- The mock robot follows `/cmd_vel`
+
 ## 0.9.0 — 2026-09-25
 
 - **Copy waypoint coordinates.** The Waypoints section has its own Copy

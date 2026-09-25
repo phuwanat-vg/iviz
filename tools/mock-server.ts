@@ -180,6 +180,8 @@ server.on("setParameters", (request, conn) => {
   server.updateParameterValues(applied);
 });
 server.on("advertise", (c) => console.log(`[mock] client advertised ${c.topic} (${c.schemaName})`));
+/** The last /cmd_vel logged, so a held key logs once, not ten times a second. */
+let lastCmdVel = "";
 server.on("message", ({ channel: c, data }) => {
   const schema = (SCHEMAS as Record<string, string>)[c.schemaName] ?? c.schema;
   if (!schema) {
@@ -190,6 +192,17 @@ server.on("message", ({ channel: c, data }) => {
     const reader = new MessageReader(parse(normalizeRos2MsgText(schema), { ros2: true }));
     const msg = reader.readMessage(data) as Record<string, unknown>;
     if (c.topic === "/goal_pose") nav2.goalPose(msg);
+    if (c.topic === "/cmd_vel") {
+      // Twist, or the twist inside a TwistStamped.
+      const t = ((msg.twist ?? msg) as { linear?: { x?: number }; angular?: { z?: number } }) ?? {};
+      const vx = Number(t.linear?.x ?? 0);
+      const wz = Number(t.angular?.z ?? 0);
+      const label = `${c.schemaName.split("/").pop()} vx=${vx.toFixed(2)} wz=${wz.toFixed(2)}${msg.header ? ` stamp=${JSON.stringify((msg.header as { stamp: unknown }).stamp)} frame=${(msg.header as { frame_id: string }).frame_id}` : ""}`;
+      if (label !== lastCmdVel) console.log(`[mock] /cmd_vel ${label}`);
+      lastCmdVel = label;
+      nav2.cmdVel(vx, wz);
+      return;
+    }
     if (STATIONS) handleStationAnswer(c.topic, msg);
     if (c.topic === "/iviz/request" && AUTO_ANSWER) {
       const body = JSON.parse(String(msg.data ?? "{}")) as { id?: string; options?: string[] };

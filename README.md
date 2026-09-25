@@ -318,6 +318,45 @@ Setup**. The action names match nav2_bringup on Jazzy. The plugin names are
 empty by default, which makes controller_server use the one it loaded; fill
 them in only when it loads several (its error message lists the names).
 
+## Teleop
+
+The **Teleop** tab drives the robot by hand, like `teleop_twist_keyboard`.
+
+- **Topic**: where the velocity goes, `/cmd_vel` by default.
+- **The pad**: hold an arrow to move, let go to stop. The corners arc
+  (forward-left, back-right, ...), the middle row turns in place, and the
+  centre button stops.
+- **Linear** and **Angular** sliders: the speeds used while a direction is
+  held, up to the maxima in Setup (1 m/s and 2 rad/s by default).
+- **Keyboard control**: while it is ticked and the Teleop tab is open, the
+  keys drive the robot. They are teleop_twist_keyboard's:
+
+  ```
+  u i o      forward-left  forward  forward-right
+  j k l      turn left     stop     turn right
+  m , .      back-left     back     back-right
+  ```
+
+  and the arrow keys, which combine (up + left arcs to the left). Hold to
+  move, let go to stop; Space or `k` stops. `q`/`z` change both speeds by
+  10 %, `w`/`x` linear only, `e`/`c` angular only. Keys typed into a text box
+  never drive the robot.
+
+While a direction is held iViz publishes at the rate in Setup (10 Hz). It sends
+a zero when you let go, and also when the window loses focus, another tab is
+opened, or the connection drops, so the robot is never left driving.
+
+**Setup** chooses the message: **Auto** uses the topic's type when the robot
+already has it on the bridge and `geometry_msgs/Twist` otherwise; Twist or
+**TwistStamped** can be forced. A TwistStamped gets the frame from Setup and a
+zero stamp, which diff_drive_controller replaces with its own clock, so a clock
+difference between the PC and the robot does not get commands dropped; choose
+**This PC's clock** when the receiver needs a real stamp.
+
+Anything else publishing on the same topic, such as Nav2's controller or a
+joystick, fights these commands. Cancel navigation first, or put `twist_mux`
+in between.
+
 ## Services and the Dashboard
 
 The side panel on the right has three tabs, switched in its header or with the

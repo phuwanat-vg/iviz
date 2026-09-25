@@ -37,6 +37,8 @@ export interface AppSettings {
   ask: AskSettings;
   /** Which parts of the Dashboard's Missions section are open. */
   missions: MissionsSettings;
+  /** Driving by hand from the Teleop tab. */
+  teleop: TeleopSettings;
   nav: NavSettings;
 }
 
@@ -50,7 +52,40 @@ export const DEFAULT_MISSIONS_SETTINGS: MissionsSettings = {
   historyOpen: true,
 };
 
-export type DockTab = "nav" | "services" | "dashboard" | "params";
+export type DockTab = "nav" | "services" | "dashboard" | "params" | "teleop";
+
+export interface TeleopSettings {
+  /** Where the velocity goes, usually /cmd_vel. */
+  topic: string;
+  /** Auto takes the topic's type when the robot already has it, else Twist. */
+  type: "auto" | "twist" | "stamped";
+  /** header.frame_id of a TwistStamped. */
+  frameId: string;
+  /** header.stamp of a TwistStamped: zero lets the receiver use its own clock. */
+  stamp: "zero" | "pc";
+  /** Speeds used while a direction is held. */
+  linear: number;
+  angular: number;
+  /** Top of the sliders. */
+  maxLinear: number;
+  maxAngular: number;
+  rateHz: number;
+  /** Keys drive the robot while the Teleop tab is open. */
+  keyboard: boolean;
+}
+
+export const DEFAULT_TELEOP: TeleopSettings = {
+  topic: "/cmd_vel",
+  type: "auto",
+  frameId: "base_link",
+  stamp: "zero",
+  linear: 0.2,
+  angular: 0.5,
+  maxLinear: 1.0,
+  maxAngular: 2.0,
+  rateHz: 10,
+  keyboard: false,
+};
 
 /**
  * Where requests for a human decision arrive and where answers go. Any node
@@ -165,13 +200,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   servicePins: [],
   ask: DEFAULT_ASK_SETTINGS,
   missions: DEFAULT_MISSIONS_SETTINGS,
+  teleop: DEFAULT_TELEOP,
   nav: DEFAULT_NAV_SETTINGS,
 };
 
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS } };
+    if (!raw) return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS }, teleop: { ...DEFAULT_TELEOP } };
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     const nav = { ...DEFAULT_NAV_SETTINGS, ...(parsed.nav ?? {}) };
     // 0.2.0 and 0.2.1 saved nav2_bringup's example plugin names as defaults,
@@ -190,9 +226,10 @@ export function loadSettings(): AppSettings {
     if (!Array.isArray(parsed.servicePins)) parsed.servicePins = [];
     const ask = { ...DEFAULT_ASK_SETTINGS, ...(parsed.ask ?? {}) };
     const missions = { ...DEFAULT_MISSIONS_SETTINGS, ...(parsed.missions ?? {}) };
-    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], ask, missions, nav };
+    const teleop = { ...DEFAULT_TELEOP, ...(parsed.teleop ?? {}) };
+    return { ...DEFAULT_SETTINGS, ...parsed, layers: Array.isArray(parsed.layers) ? parsed.layers : [], ask, missions, teleop, nav };
   } catch {
-    return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS }, nav: { ...DEFAULT_NAV_SETTINGS } };
+    return { ...DEFAULT_SETTINGS, missions: { ...DEFAULT_MISSIONS_SETTINGS }, teleop: { ...DEFAULT_TELEOP }, nav: { ...DEFAULT_NAV_SETTINGS } };
   }
 }
 

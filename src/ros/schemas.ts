@@ -182,6 +182,18 @@ geometry_msgs/PoseStamped[] poses`,
     POINT,
     QUATERNION,
   ),
+  "geometry_msgs/msg/Twist": def(
+    `geometry_msgs/Vector3 linear
+geometry_msgs/Vector3 angular`,
+    VECTOR3,
+  ),
+  "geometry_msgs/msg/TwistStamped": def(
+    `std_msgs/Header header
+geometry_msgs/Twist twist`,
+    HEADER,
+    TWIST,
+    VECTOR3,
+  ),
   "nav_msgs/msg/Odometry": def(
     `std_msgs/Header header
 string child_frame_id

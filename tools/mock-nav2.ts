@@ -35,6 +35,8 @@ export interface Nav2Sim {
   plan(): Pose[] | undefined;
   /** A client published on /goal_pose, which bt_navigator turns into a goal. */
   goalPose(msg: Msg): void;
+  /** A velocity command on /cmd_vel: the robot drives by hand for half a second. */
+  cmdVel(vx: number, wz: number): void;
   /** Handle a call to one of the simulated services; false if it is not one. */
   handleServiceCall(req: ServiceCallRequest, conn: IWebSocket): boolean;
 }
@@ -95,6 +97,7 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
   const t0 = Date.now();
   const robot: Pose = { x: 3.5, y: 0, yaw: Math.PI / 2 };
   let autopilot = true;
+  let manual = { vx: 0, wz: 0, until: 0 };
   let active: SimGoal | undefined;
   const handlers = new Map<number, (req: ServiceCallRequest, conn: IWebSocket) => void>();
   const actions: SimAction[] = [];
@@ -265,6 +268,11 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
     const dt = Math.min(0.2, (now - lastTick) / 1000);
     lastTick = now;
     if (active) step(active, dt);
+    else if (now < manual.until) {
+      robot.yaw = wrap(robot.yaw + manual.wz * dt);
+      robot.x += Math.cos(robot.yaw) * manual.vx * dt;
+      robot.y += Math.sin(robot.yaw) * manual.vx * dt;
+    }
   }, 50);
 
   const step = (g: SimGoal, dt: number): void => {
@@ -351,6 +359,13 @@ export function createNav2Sim(server: FoxgloveServer, subscribed: ReadonlySet<nu
       if (!g) return undefined;
       if (g.action.kind === "path") return g.poses.slice(g.index);
       return [{ ...robot }, ...g.poses.slice(g.index)];
+    },
+    cmdVel(vx: number, wz: number): void {
+      if (autopilot) {
+        Object.assign(robot, circlePose());
+        autopilot = false;
+      }
+      manual = { vx, wz, until: Date.now() + 500 };
     },
     goalPose(msg: Msg): void {
       const uuid = new Uint8Array(16);
