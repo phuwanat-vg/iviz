@@ -24,6 +24,11 @@ for new versions themselves, so this is a one-time download.
   `nav_msgs/Odometry`, `geometry_msgs/PoseStamped`, `geometry_msgs/PoseWithCovarianceStamped`,
   `geometry_msgs/PolygonStamped`
 - TF tree display with frame names, selectable fixed frame, follow-frame camera
+  - both frame menus have a pencil to **type a frame by hand**, for a frame the
+    robot does not publish yet (no `map` before AMCL or SLAM starts, a
+    namespaced `robot2/base_link`); names are suggested as you type, Enter or
+    clicking away applies, Esc cancels, empty means auto (or none). A typed
+    frame missing from TF shows as *(missing)* with a note under it
 - Nav2 tools: **2D Nav Goal** and **2D Pose Estimate** by click-and-drag, **waypoints**
   (FollowWaypoints or NavigateThroughPoses, optional loop), **follow a drawn path**
   (FollowPath), **pause / resume / cancel**, and **save the map** on the robot or on this PC

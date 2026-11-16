@@ -2,6 +2,16 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.11.0 — 2026-11-16
+
+- **Type a TF frame by hand.** The Fixed frame and Follow menus have a pencil
+  beside them: type any frame, even one the robot does not publish yet (no
+  `map` before AMCL or SLAM is up, a namespaced frame). Known frames are
+  suggested while typing, Enter or clicking away applies, Esc cancels, and an
+  empty name returns to auto (or none). A fixed frame that is not in TF shows
+  as *(missing)* with a note saying what will and will not draw until it
+  appears
+
 ## 0.10.0 — 2026-09-25
 
 - **Teleop** tab: drive the robot by hand. A pad of arrows (hold to move, let

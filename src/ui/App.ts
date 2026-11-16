@@ -93,6 +93,9 @@ export class App {
   #layersEl!: HTMLElement;
   #fixedSel!: HTMLSelectElement;
   #followSel!: HTMLSelectElement;
+  /** Frame names offered while typing one. */
+  #frameList!: HTMLDataListElement;
+  #fixedNote!: HTMLElement;
   #mode2dBtn!: HTMLButtonElement;
   #mode3dBtn!: HTMLButtonElement;
   #goalBtn!: HTMLButtonElement;
@@ -236,12 +239,15 @@ export class App {
     this.#mode2dBtn.addEventListener("click", () => this.#setMode("2d"));
     this.#mode3dBtn.addEventListener("click", () => this.#setMode("3d"));
 
+    this.#frameList = h("datalist", { id: "iviz-frames" });
     this.#followSel = h("select", { title: "Follow frame" });
-    this.#followSel.addEventListener("change", () => {
-      this.settings.followFrame = this.#followSel.value;
-      this.viewer.followFrame = this.#followSel.value;
+    const setFollow = (frame: string): void => {
+      this.settings.followFrame = frame;
+      this.viewer.followFrame = frame;
+      this.#refreshFrameSelects();
       this.#save();
-    });
+    };
+    this.#followSel.addEventListener("change", () => setFollow(this.#followSel.value));
 
     this.#goalBtn = h("button", { title: "Click and drag in the view to send a goal" }, icon("goal"), "2D Nav Goal");
     this.#initBtn = h("button", { title: "Click and drag in the view to set initial pose" }, icon("poseEstimate"), "2D Pose Estimate");
@@ -272,7 +278,8 @@ export class App {
       h("div", { class: "spacer" }),
       h("div", { class: "seg" }, this.#mode2dBtn, this.#mode3dBtn),
       h("label", { class: "stats", title: "Keep the camera centered on a TF frame" }, icon("follow"), "Follow"),
-      this.#followSel,
+      this.#frameEditor(this.#followSel, "Type a frame to follow (empty = none)", (frame) => setFollow(frame)),
+      this.#frameList,
       this.#goalBtn,
       this.#initBtn,
       resetBtn,
@@ -282,11 +289,15 @@ export class App {
 
     // Sidebar
     this.#fixedSel = h("select");
-    this.#fixedSel.addEventListener("change", () => {
-      this.settings.fixedFrame = this.#fixedSel.value;
+    const setFixed = (frame: string): void => {
+      this.settings.fixedFrame = frame;
       this.#applyFixedFrame();
+      this.#refreshFrameSelects();
       this.#save();
-    });
+    };
+    this.#fixedSel.addEventListener("change", () => setFixed(this.#fixedSel.value));
+    this.#fixedNote = h("div", { class: "nav-note warn" });
+    this.#fixedNote.hidden = true;
     const gridChk = h("input", { type: "checkbox" });
     gridChk.checked = this.settings.showGrid;
     gridChk.addEventListener("change", () => {
@@ -304,7 +315,8 @@ export class App {
     });
 
     const viewSection = section("View", [
-      h("div", { class: "row" }, h("label", { text: "Fixed frame" }), this.#fixedSel),
+      h("div", { class: "row" }, h("label", { text: "Fixed frame" }), this.#frameEditor(this.#fixedSel, "Type a frame (empty = auto)", (frame) => setFixed(frame))),
+      this.#fixedNote,
       h("div", { class: "row" }, h("label", { text: "Show grid" }), gridChk),
       h("div", { class: "row" }, h("label", { text: "Show inactive topics" }), inactiveChk),
     ], false, "eye");
@@ -877,6 +889,55 @@ export class App {
     }
     this.#followSel.replaceChildren(...followOpts);
     this.#followSel.value = this.settings.followFrame;
+
+    this.#frameList.replaceChildren(...frames.map((f) => h("option", { value: f })));
+    const typed = this.settings.fixedFrame;
+    const missing = typed !== "" && !frames.includes(typed);
+    this.#fixedNote.hidden = !missing || this.conn.state !== "connected";
+    this.#fixedNote.textContent = missing
+      ? `${typed} is not in TF yet. Data in other frames shows once something publishes a transform to ${typed}; data stamped in ${typed} itself shows now.`
+      : "";
+  }
+
+  /**
+   * A frame menu with a pencil beside it for typing a name that is not in the
+   * menu, such as a frame the robot does not publish yet. Enter applies, Esc
+   * cancels, an empty name means auto (or none).
+   */
+  #frameEditor(select: HTMLSelectElement, placeholder: string, apply: (frame: string) => void): HTMLElement {
+    const input = h("input", { type: "text", class: "frame-input", placeholder });
+    // `list` is a read-only property, so it has to go in as an attribute.
+    input.setAttribute("list", "iviz-frames");
+    input.spellcheck = false;
+    input.hidden = true;
+    const edit = h("button", { class: "icon-only", title: "Type a frame name" }, icon("edit"));
+    let done = false;
+    const close = (commit: boolean): void => {
+      if (done) return;
+      done = true;
+      if (commit) apply(input.value.trim().replace(/^\//, ""));
+      input.hidden = true;
+      select.hidden = false;
+      edit.hidden = false;
+    };
+    edit.addEventListener("click", () => {
+      done = false;
+      input.value = select.value;
+      select.hidden = true;
+      edit.hidden = true;
+      input.hidden = false;
+      input.focus();
+      input.select();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") close(true);
+      else if (e.key === "Escape") {
+        e.stopPropagation();
+        close(false);
+      }
+    });
+    input.addEventListener("blur", () => close(true));
+    return h("span", { class: "frame-edit" }, select, input, edit);
   }
 
   #tick(): void {
