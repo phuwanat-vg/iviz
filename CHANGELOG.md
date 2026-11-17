@@ -2,6 +2,16 @@
 
 © 2026 phuwanat@IRiSH Lab SUT
 
+## 0.12.0 — 2026-11-17
+
+- **Ubuntu.** Every release now has an Ubuntu build next to the Windows one:
+  a `.deb` (`sudo apt install ./iViz_*_amd64.deb`) and an `.AppImage` that
+  updates itself like the Windows installer. Built on Ubuntu 22.04, so they run
+  on 22.04 and 24.04
+- On Linux iViz turns off WebKitGTK's DMA-BUF renderer unless
+  `WEBKIT_DISABLE_DMABUF_RENDERER` is already set, which avoids a blank window
+  on NVIDIA drivers and some virtual machines
+
 ## 0.11.0 — 2026-11-16
 
 - **Type a TF frame by hand.** The Fixed frame and Follow menus have a pencil

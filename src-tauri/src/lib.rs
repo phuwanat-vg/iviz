@@ -25,6 +25,12 @@ fn write_map_files(yaml_path: String, yaml: String, pgm_path: String, pgm_base64
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK's DMA-BUF renderer leaves the window blank on some Linux
+    // drivers (NVIDIA, some VMs). Turn it off unless the user chose otherwise.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     tauri::Builder::default()
         // In-app updates: checks the endpoints in tauri.conf.json, verifies the
         // signature with the embedded public key, installs, then the frontend

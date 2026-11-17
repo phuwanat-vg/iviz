@@ -1,17 +1,29 @@
 # iViz
 
-Lightweight ROS 2 visualization for Windows. iViz connects to
+Lightweight ROS 2 visualization for Windows and Ubuntu. iViz connects to
 [`foxglove_bridge`](https://github.com/foxglove/ros-foxglove-bridge) running on
 the robot (Raspberry Pi 5) over a single WebSocket, so nothing ROS-related has
-to be installed on the Windows side and no remote desktop is needed.
+to be installed on the PC side and no remote desktop is needed.
 
-Built with Tauri 2 (WebView2) + TypeScript + three.js.
+Built with Tauri 2 (WebView2 on Windows, WebKitGTK on Linux) + TypeScript + three.js.
 
 ## Download
 
-Grab the latest `iViz_*_x64-setup.exe` from
-[Releases](https://github.com/phuwanat-vg/iviz/releases). Installed copies check
-for new versions themselves, so this is a one-time download.
+From [Releases](https://github.com/phuwanat-vg/iviz/releases):
+
+| System | File | Install |
+|---|---|---|
+| Windows 10/11 | `iViz_*_x64-setup.exe` | run it |
+| Ubuntu 22.04 / 24.04 | `iViz_*_amd64.deb` | `sudo apt install ./iViz_*_amd64.deb`, then iViz is in the app menu |
+| Ubuntu, no install | `iViz_*_amd64.AppImage` | `chmod +x iViz_*.AppImage` and run it; Ubuntu 24.04 first needs `sudo apt install libfuse2t64` |
+
+The Windows installer and the AppImage update themselves from **Check for
+updates**, so they are a one-time download. Update a `.deb` install by
+installing the newer `.deb` the same way.
+
+On Ubuntu the robot only needs to be reachable; nothing from ROS has to be
+installed on the PC, though it can be. If the window stays blank on an unusual
+graphics driver, start it from a terminal and read the messages there.
 
 ## Features
 
@@ -97,6 +109,18 @@ npm run tauri build
 
 Then enter `ws://<pi-ip>:8765` in the top bar and press **Connect**.
 
+
+### Building on Ubuntu
+
+Install the WebKitGTK and toolchain packages once, plus Node.js 22+ and Rust:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file build-essential
+```
+
+Then `npm install`, `npm run tauri dev`, and `npm run tauri build -- --bundles deb,appimage`
+(packages in `src-tauri/target/release/bundle/deb` and `appimage`). Release
+builds of both systems come from the same tag, see Releases below.
 ## Develop without a robot
 
 A mock `foxglove_bridge` simulates a robot driving around a room and publishes
